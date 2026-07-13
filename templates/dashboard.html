@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>铁路轴承健康状态分析系统 - 仪表盘</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <link href="/static/css/style.css" rel="stylesheet">
+</head>
+<body>
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <i class="bi bi-train-front"></i>
+            <span class="brand-text">轴承健康分析系统</span>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="/dashboard" class="nav-item active">
+                <i class="bi bi-speedometer2"></i>
+                <span>系统仪表盘</span>
+            </a>
+            <a href="/comparison" class="nav-item">
+                <i class="bi bi-bar-chart-steps"></i>
+                <span>对比分析</span>
+            </a>
+            <div class="nav-divider"></div>
+            <div class="nav-section-title">轴承数据集</div>
+            <div id="sidebarBearingList" class="bearing-mini-list">
+                <div class="text-center py-3 text-muted small">加载中...</div>
+            </div>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <i class="bi bi-person-circle"></i>
+                <span>{{ user.name if user else '用户' }}</span>
+            </div>
+            <button onclick="handleLogout()" class="btn-logout" title="退出登录">
+                <i class="bi bi-box-arrow-right"></i>
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main-content">
+        <!-- Top bar -->
+        <header class="topbar">
+            <button class="toggle-sidebar" onclick="toggleSidebar()">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="topbar-title">系统仪表盘</div>
+            <div class="topbar-right">
+                <div class="sys-status" id="sysStatus">
+                    <span class="status-dot"></span>
+                    <span class="status-text">系统运行中</span>
+                </div>
+                <span class="topbar-time" id="topbarTime"></span>
+            </div>
+        </header>
+
+        <!-- Dashboard content -->
+        <div class="content-area">
+            <!-- Stats cards -->
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #e8f4fd;">
+                        <i class="bi bi-gear" style="color: #2980b9;"></i>
+                    </div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="statBearings">--</div>
+                        <div class="stat-label">轴承总数</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #eafaf1;">
+                        <i class="bi bi-database" style="color: #27ae60;"></i>
+                    </div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="statDataPoints">--</div>
+                        <div class="stat-label">数据点总数</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #fef9e7;">
+                        <i class="bi bi-sliders" style="color: #f39c12;"></i>
+                    </div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="statConditions">--</div>
+                        <div class="stat-label">工作条件</div>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon" style="background: #fdedec;">
+                        <i class="bi bi-exclamation-triangle" style="color: #e74c3c;"></i>
+                    </div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="statFaults">--</div>
+                        <div class="stat-label">故障类型</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Control panel -->
+            <div class="control-panel">
+                <div class="panel-title">
+                    <i class="bi bi-funnel"></i> 数据筛选
+                </div>
+                <div class="control-row">
+                    <div class="control-item">
+                        <label>轴承选择</label>
+                        <select id="bearingSelect">
+                            <option value="">-- 请选择轴承 --</option>
+                        </select>
+                    </div>
+                    <div class="control-item">
+                        <label>数据集</label>
+                        <select id="datasetFilter" onchange="loadBearingList()">
+                            <option value="all">全部数据集</option>
+                            <option value="xjtu">XJTU-SY 数据集</option>
+                            <option value="gearbox">Gearbox 数据集</option>
+                            <option value="test">测试样本</option>
+                        </select>
+                    </div>
+                    <div class="control-item">
+                        <label>数据模式</label>
+                        <select id="dataMode" onchange="refreshCharts()">
+                            <option value="aggregated">聚合统计 (RMS)</option>
+                            <option value="sampled">采样数据 (原始值)</option>
+                        </select>
+                    </div>
+                    <div class="control-item">
+                        <label>数据点数</label>
+                        <select id="pointLimit" onchange="refreshCharts()">
+                            <option value="200">200 点</option>
+                            <option value="500" selected>500 点</option>
+                            <option value="1000">1000 点</option>
+                            <option value="2000">2000 点</option>
+                        </select>
+                    </div>
+                    <div class="control-item">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-primary btn-sm" onclick="refreshCharts()">
+                            <i class="bi bi-arrow-repeat"></i> 刷新
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts grid -->
+            <div class="charts-grid">
+                <!-- Vibration Time Series -->
+                <div class="chart-card chart-card-wide">
+                    <div class="chart-card-header">
+                        <h5><i class="bi bi-graph-up"></i> 振动信号时域波形</h5>
+                        <span class="chart-badge" id="chartBearingName">--</span>
+                    </div>
+                    <div class="chart-body" id="chartVibration" style="height: 400px;"></div>
+                </div>
+
+                <!-- RMS Trend -->
+                <div class="chart-card">
+                    <div class="chart-card-header">
+                        <h5><i class="bi bi-activity"></i> RMS 趋势</h5>
+                    </div>
+                    <div class="chart-body" id="chartRmsTrend" style="height: 400px;"></div>
+                </div>
+
+                <!-- Health Score -->
+                <div class="chart-card">
+                    <div class="chart-card-header">
+                        <h5><i class="bi bi-heart-pulse"></i> 健康评分趋势</h5>
+                    </div>
+                    <div class="chart-body" id="chartHealth" style="height: 400px;"></div>
+                </div>
+
+                <!-- Aggregate Stats Bar -->
+                <div class="chart-card chart-card-wide">
+                    <div class="chart-card-header">
+                        <h5><i class="bi bi-bar-chart"></i> 统计特征对比（水平 vs 垂直）</h5>
+                    </div>
+                    <div class="chart-body" id="chartStatsBar" style="height: 350px;"></div>
+                </div>
+
+                <!-- Peak-to-Peak & Crest Factor -->
+                <div class="chart-card">
+                    <div class="chart-card-header">
+                        <h5><i class="bi bi-triangle"></i> 峰峰值趋势</h5>
+                    </div>
+                    <div class="chart-body" id="chartPeakToPeak" style="height: 350px;"></div>
+                </div>
+
+                <!-- Crest Factor -->
+                <div class="chart-card">
+                    <div class="chart-card-header">
+                        <h5><i class="bi bi-cpu"></i> 波峰因子趋势</h5>
+                    </div>
+                    <div class="chart-body" id="chartCrestFactor" style="height: 350px;"></div>
+                </div>
+            </div>
+
+            <!-- Health Status Panel -->
+            <div class="health-panel" id="healthPanel" style="display: none;">
+                <div class="health-panel-header">
+                    <h4><i class="bi bi-clipboard2-pulse"></i> 轴承健康评估报告</h4>
+                    <span id="healthReportTime"></span>
+                </div>
+                <div class="health-panel-body" id="healthReportBody">
+                    <!-- Filled dynamically -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // ============================================================
+        // Global state
+        // ============================================================
+        let charts = {};
+        let currentBearingData = null;
+        let bearingList = [];
+        let refreshAbortController = null;
+
+        // ============================================================
+        // Utility: fetch with timeout and abort support
+        // ============================================================
+        function fetchWithTimeout(url, timeoutMs = 15000, externalSignal = null) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), timeoutMs);
+            if (externalSignal) {
+                if (externalSignal.aborted) {
+                    controller.abort();
+                    clearTimeout(timeout);
+                } else {
+                    externalSignal.addEventListener('abort', () => controller.abort());
+                }
+            }
+            return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timeout));
+        }
+
+        // ============================================================
+        // Utility: debounce
+        // ============================================================
+        function debounce(fn, delay) {
+            let timer;
+            return function(...args) {
+                clearTimeout(timer);
+                timer = setTimeout(() => fn.apply(this, args), delay);
+            };
+        }
+
+        // ============================================================
+        // Init
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            initCharts();
+            loadStatistics();
+            loadBearingList();
+            updateTime();
+            setInterval(updateTime, 10000);
+            // Debounced bearing selection
+            document.getElementById('bearingSelect').addEventListener('change',
+                debounce(onBearingChange, 300)
+            );
+        });
+
+        function updateTime() {
+            document.getElementById('topbarTime').textContent = new Date().toLocaleString('zh-CN');
+        }
+
+        // ============================================================
+        // Sidebar toggle
+        // ============================================================
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        }
+
+        // ============================================================
+        // Logout
+        // ============================================================
+        async function handleLogout() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+            } catch (e) {}
+            window.location.href = '/login';
+        }
+
+        // ============================================================
+        // Load statistics
+        // ============================================================
+        async function loadStatistics() {
+            try {
+                const resp = await fetch('/api/statistics');
+                const data = await resp.json();
+                document.getElementById('statBearings').textContent = data.bearing_count;
+                document.getElementById('statDataPoints').textContent = formatNumber(data.total_points);
+                document.getElementById('statConditions').textContent = data.condition_count;
+                document.getElementById('statFaults').textContent = data.fault_types;
+            } catch (e) {
+                console.error('Failed to load statistics:', e);
+            }
+        }
+
+        // ============================================================
+        // Load bearing list
+        // ============================================================
+        async function loadBearingList() {
+            const dataset = document.getElementById('datasetFilter').value;
+            const select = document.getElementById('bearingSelect');
+            const sidebarList = document.getElementById('sidebarBearingList');
+
+            try {
+                const resp = await fetch(`/api/bearings?dataset=${dataset}`);
+                const data = await resp.json();
+                bearingList = data.bearings;
+
+                // Update select
+                select.innerHTML = '<option value="">-- 请选择轴承 --</option>';
+                bearingList.forEach(b => {
+                    const opt = document.createElement('option');
+                    opt.value = b.bearing_no;
+                    opt.textContent = `${b.bearing_no} [${b.fault_type || '未知'}]`;
+                    select.appendChild(opt);
+                });
+
+                // Update sidebar mini list
+                sidebarList.innerHTML = bearingList.slice(0, 30).map(b => `
+                    <a href="/bearing/${b.bearing_no}" class="bearing-mini-item" title="${b.bearing_no}">
+                        <span class="bearing-dot" style="background: ${getFaultColor(b.fault_type)}"></span>
+                        <span class="bearing-no">${b.bearing_no}</span>
+                        <span class="bearing-type">${b.fault_type || '--'}</span>
+                    </a>
+                `).join('');
+
+                if (bearingList.length > 30) {
+                    sidebarList.innerHTML += `<div class="text-center py-2 text-muted small">还有 ${bearingList.length - 30} 个轴承...</div>`;
+                }
+            } catch (e) {
+                console.error('Failed to load bearings:', e);
+            }
+        }
+
+        // ============================================================
+        // Bearing selection change
+        // ============================================================
+        async function onBearingChange() {
+            const bearingNo = document.getElementById('bearingSelect').value;
+            // Abort any in-flight refresh
+            if (refreshAbortController) {
+                refreshAbortController.abort();
+            }
+            if (!bearingNo) {
+                clearCharts();
+                return;
+            }
+            document.getElementById('chartBearingName').textContent = bearingNo;
+            await refreshCharts();
+        }
+
+        // ============================================================
+        // Refresh all charts
+        // ============================================================
+        async function refreshCharts() {
+            const bearingNo = document.getElementById('bearingSelect').value;
+            if (!bearingNo) return;
+
+            const mode = document.getElementById('dataMode').value;
+            const limit = parseInt(document.getElementById('pointLimit').value);
+
+            document.getElementById('chartBearingName').textContent = bearingNo;
+            showLoading(true);
+
+            // Create new abort controller for this request batch
+            refreshAbortController = new AbortController();
+            const signal = refreshAbortController.signal;
+
+            try {
+                // Fetch data in parallel (3 calls: rms_trend is derived from aggregate_stats)
+                const [aggResp, healthResp, summaryResp] = await Promise.all([
+                    fetchWithTimeout(`/api/bearing/${bearingNo}/aggregate_stats?limit=${limit}`, 15000, signal),
+                    fetchWithTimeout(`/api/bearing/${bearingNo}/health_score?limit=${limit}`, 15000, signal),
+                    fetchWithTimeout(`/api/bearing/${bearingNo}/health_summary`, 15000, signal)
+                ]);
+
+                const aggData = await aggResp.json();
+                const healthData = await healthResp.json();
+                const summaryData = await summaryResp.json();
+
+                currentBearingData = {
+                    agg: aggData,
+                    health: healthData,
+                    summary: summaryData
+                };
+
+                updateVibrationChart(aggData, mode);
+                updateRmsTrendChart(aggData);
+                updateHealthChart(healthData);
+                updateStatsBarChart(aggData);
+                updatePeakToPeakChart(aggData);
+                updateCrestFactorChart(aggData);
+                updateHealthPanel(summaryData);
+
+            } catch (e) {
+                if (e.name === 'AbortError') {
+                    return;  // Silently ignore - user switched bearings or timeout
+                }
+                console.error('Failed to refresh charts:', e);
+                alert('数据加载失败，请检查API服务是否正常运行');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // ============================================================
+        // Chart: Vibration Time Series
+        // ============================================================
+        function updateVibrationChart(aggData, mode) {
+            const chart = charts.vibration;
+            if (!chart) return;
+
+            const stats = aggData.stats || [];
+
+            if (mode === 'aggregated') {
+                const times = stats.map(s => s.timestamp);
+                const hRms = stats.map(s => s.h_rms);
+                const vRms = stats.map(s => s.v_rms);
+                const hPeak = stats.map(s => s.h_peak);
+                const vPeak = stats.map(s => s.v_peak);
+
+                chart.setOption({
+                    title: null,
+                    tooltip: {
+                        trigger: 'axis',
+                        axisPointer: { type: 'cross' }
+                    },
+                    legend: {
+                        data: ['水平RMS', '垂直RMS', '水平峰值', '垂直峰值'],
+                        top: 0
+                    },
+                    grid: { left: 60, right: 30, top: 40, bottom: 50 },
+                    dataZoom: [
+                        { type: 'inside', start: 0, end: 100 },
+                        { type: 'slider', start: 0, end: 100, height: 25, bottom: 10 }
+                    ],
+                    xAxis: {
+                        type: 'category',
+                        data: times,
+                        axisLabel: { rotate: 45, fontSize: 10 },
+                        name: '时间'
+                    },
+                    yAxis: {
+                        type: 'value',
+                        name: '振动幅值 (g)',
+                        axisLabel: { fontSize: 10 }
+                    },
+                    series: [
+                        {
+                            name: '水平RMS',
+                            type: 'line',
+                            data: hRms,
+                            smooth: true,
+                            symbol: 'none',
+                            lineStyle: { width: 1.5, color: '#2980b9' },
+                            itemStyle: { color: '#2980b9' }
+                        },
+                        {
+                            name: '垂直RMS',
+                            type: 'line',
+                            data: vRms,
+                            smooth: true,
+                            symbol: 'none',
+                            lineStyle: { width: 1.5, color: '#e74c3c' },
+                            itemStyle: { color: '#e74c3c' }
+                        },
+                        {
+                            name: '水平峰值',
+                            type: 'line',
+                            data: hPeak,
+                            smooth: true,
+                            symbol: 'none',
+                            lineStyle: { width: 1, color: '#85c1e9', type: 'dashed' },
+                            itemStyle: { color: '#85c1e9' }
+                        },
+                        {
+                            name: '垂直峰值',
+                            type: 'line',
+                            data: vPeak,
+                            smooth: true,
+                            symbol: 'none',
+                            lineStyle: { width: 1, color: '#f1948a', type: 'dashed' },
+                            itemStyle: { color: '#f1948a' }
+                        }
+                    ]
+                });
+            } else {
+                chart.setOption({
+                    title: {
+                        text: '请使用聚合模式查看汇总趋势数据',
+                        left: 'center',
+                        top: 'center',
+                        textStyle: { color: '#bdc3c7', fontSize: 14, fontWeight: 'normal' }
+                    },
+                    series: []
+                }, true);
+            }
+        }
+
+        // ============================================================
+        // Chart: RMS Trend
+        // ============================================================
+        function updateRmsTrendChart(aggData) {
+            const chart = charts.rmsTrend;
+            if (!chart) return;
+
+            const stats = aggData.stats || [];
+            const times = stats.map(t => t.timestamp);
+            const hRms = stats.map(t => t.h_rms);
+            const vRms = stats.map(t => t.v_rms);
+
+            chart.setOption({
+                title: null,
+                tooltip: { trigger: 'axis' },
+                legend: {
+                    data: ['水平通道 RMS', '垂直通道 RMS'],
+                    top: 0
+                },
+                grid: { left: 55, right: 25, top: 40, bottom: 50 },
+                dataZoom: [
+                    { type: 'inside' },
+                    { type: 'slider', height: 20, bottom: 10 }
+                ],
+                xAxis: {
+                    type: 'category',
+                    data: times,
+                    axisLabel: { rotate: 45, fontSize: 9 },
+                    name: '时间'
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'RMS (g)',
+                    axisLabel: { fontSize: 10 }
+                },
+                series: [
+                    {
+                        name: '水平通道 RMS',
+                        type: 'line',
+                        data: hRms,
+                        smooth: true,
+                        symbol: 'none',
+                        areaStyle: { opacity: 0.15 },
+                        lineStyle: { color: '#2980b9', width: 2 },
+                        itemStyle: { color: '#2980b9' }
+                    },
+                    {
+                        name: '垂直通道 RMS',
+                        type: 'line',
+                        data: vRms,
+                        smooth: true,
+                        symbol: 'none',
+                        areaStyle: { opacity: 0.15 },
+                        lineStyle: { color: '#e74c3c', width: 2 },
+                        itemStyle: { color: '#e74c3c' }
+                    }
+                ]
+            });
+        }
+
+        // ============================================================
+        // Chart: Health Score
+        // ============================================================
+        function updateHealthChart(healthData) {
+            const chart = charts.health;
+            if (!chart) return;
+
+            const hd = healthData.health_data || [];
+            const times = hd.map(h => h.timestamp);
+            const scores = hd.map(h => h.health_score);
+            const categories = hd.map(h => h.category_cn);
+
+            // Use category colors for visual marks
+            const markAreas = buildHealthMarkAreas(times, scores);
+
+            chart.setOption({
+                title: null,
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function(params) {
+                        const d = params[0];
+                        const idx = d.dataIndex;
+                        const cat = categories[idx] || '--';
+                        const score = scores[idx] || 0;
+                        return `${d.axisValue}<br/>健康评分: <b>${score}</b><br/>状态: <b>${cat}</b>`;
+                    }
+                },
+                grid: { left: 55, right: 30, top: 20, bottom: 50 },
+                dataZoom: [
+                    { type: 'inside' },
+                    { type: 'slider', height: 20, bottom: 10 }
+                ],
+                xAxis: {
+                    type: 'category',
+                    data: times,
+                    axisLabel: { rotate: 45, fontSize: 9 },
+                    name: '时间'
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '健康评分',
+                    min: 0,
+                    max: 100,
+                    axisLabel: { fontSize: 10 },
+                    splitLine: { lineStyle: { type: 'dashed' } }
+                },
+                visualMap: {
+                    show: false,
+                    pieces: [
+                        { gte: 80, color: '#52c41a' },
+                        { gte: 60, lt: 80, color: '#faad14' },
+                        { gte: 40, lt: 60, color: '#fa8c16' },
+                        { gte: 20, lt: 40, color: '#f5222d' },
+                        { lt: 20, color: '#cf1322' }
+                    ]
+                },
+                series: [
+                    {
+                        type: 'line',
+                        data: scores,
+                        smooth: true,
+                        symbol: 'circle',
+                        symbolSize: 4,
+                        lineStyle: { width: 2.5 },
+                        markLine: {
+                            silent: true,
+                            data: [
+                                { yAxis: 80, label: { formatter: '健康线' }, lineStyle: { color: '#52c41a', type: 'dashed' } },
+                                { yAxis: 60, label: { formatter: '注意线' }, lineStyle: { color: '#faad14', type: 'dashed' } },
+                                { yAxis: 40, label: { formatter: '警告线' }, lineStyle: { color: '#f5222d', type: 'dashed' } }
+                            ]
+                        }
+                    }
+                ]
+            });
+        }
+
+        function buildHealthMarkAreas(times, scores) {
+            // Simplified - just return empty for now
+            return [];
+        }
+
+        // ============================================================
+        // Chart: Statistics Bar Chart
+        // ============================================================
+        function updateStatsBarChart(aggData) {
+            const chart = charts.statsBar;
+            if (!chart) return;
+
+            const stats = aggData.stats || [];
+            if (stats.length === 0) return;
+
+            // Calculate averages across all samples
+            const avgHrms = stats.reduce((s, x) => s + x.h_rms, 0) / stats.length;
+            const avgVrms = stats.reduce((s, x) => s + x.v_rms, 0) / stats.length;
+            const avgHpeak = stats.reduce((s, x) => s + x.h_peak, 0) / stats.length;
+            const avgVpeak = stats.reduce((s, x) => s + x.v_peak, 0) / stats.length;
+            const avgHpp = stats.reduce((s, x) => s + x.h_pp, 0) / stats.length;
+            const avgVpp = stats.reduce((s, x) => s + x.v_pp, 0) / stats.length;
+
+            chart.setOption({
+                title: null,
+                tooltip: { trigger: 'axis' },
+                legend: {
+                    data: ['水平通道', '垂直通道'],
+                    top: 0
+                },
+                grid: { left: 55, right: 25, top: 30, bottom: 40 },
+                xAxis: {
+                    type: 'category',
+                    data: ['RMS', '峰值', '峰峰值']
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '幅值 (g)'
+                },
+                series: [
+                    {
+                        name: '水平通道',
+                        type: 'bar',
+                        data: [
+                            { value: round4(avgHrms), itemStyle: { color: '#2980b9' } },
+                            { value: round4(avgHpeak), itemStyle: { color: '#5dade2' } },
+                            { value: round4(avgHpp), itemStyle: { color: '#85c1e9' } }
+                        ],
+                        barWidth: '35%',
+                        label: { show: true, position: 'top', fontSize: 10 }
+                    },
+                    {
+                        name: '垂直通道',
+                        type: 'bar',
+                        data: [
+                            { value: round4(avgVrms), itemStyle: { color: '#e74c3c' } },
+                            { value: round4(avgVpeak), itemStyle: { color: '#ec7063' } },
+                            { value: round4(avgVpp), itemStyle: { color: '#f1948a' } }
+                        ],
+                        barWidth: '35%',
+                        label: { show: true, position: 'top', fontSize: 10 }
+                    }
+                ]
+            });
+        }
+
+        // ============================================================
+        // Chart: Peak-to-Peak
+        // ============================================================
+        function updatePeakToPeakChart(aggData) {
+            const chart = charts.peakToPeak;
+            if (!chart) return;
+
+            const stats = aggData.stats || [];
+            const times = stats.map(s => s.timestamp);
+            const hPp = stats.map(s => s.h_pp);
+            const vPp = stats.map(s => s.v_pp);
+
+            chart.setOption({
+                title: null,
+                tooltip: { trigger: 'axis' },
+                legend: {
+                    data: ['水平峰峰值', '垂直峰峰值'],
+                    top: 0
+                },
+                grid: { left: 55, right: 25, top: 35, bottom: 45 },
+                dataZoom: [
+                    { type: 'inside' },
+                    { type: 'slider', height: 18, bottom: 8 }
+                ],
+                xAxis: {
+                    type: 'category',
+                    data: times,
+                    axisLabel: { rotate: 45, fontSize: 9 }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '峰峰值 (g)'
+                },
+                series: [
+                    {
+                        name: '水平峰峰值',
+                        type: 'line',
+                        data: hPp,
+                        smooth: true,
+                        symbol: 'none',
+                        lineStyle: { color: '#2980b9', width: 1.5 }
+                    },
+                    {
+                        name: '垂直峰峰值',
+                        type: 'line',
+                        data: vPp,
+                        smooth: true,
+                        symbol: 'none',
+                        lineStyle: { color: '#e74c3c', width: 1.5 }
+                    }
+                ]
+            });
+        }
+
+        // ============================================================
+        // Chart: Crest Factor
+        // ============================================================
+        function updateCrestFactorChart(aggData) {
+            const chart = charts.crestFactor;
+            if (!chart) return;
+
+            const stats = aggData.stats || [];
+            const times = stats.map(s => s.timestamp);
+            const hCf = stats.map(s => s.h_crest_factor);
+            const vCf = stats.map(s => s.v_crest_factor);
+
+            chart.setOption({
+                title: null,
+                tooltip: { trigger: 'axis' },
+                legend: {
+                    data: ['水平波峰因子', '垂直波峰因子'],
+                    top: 0
+                },
+                grid: { left: 55, right: 25, top: 35, bottom: 45 },
+                dataZoom: [
+                    { type: 'inside' },
+                    { type: 'slider', height: 18, bottom: 8 }
+                ],
+                xAxis: {
+                    type: 'category',
+                    data: times,
+                    axisLabel: { rotate: 45, fontSize: 9 }
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '波峰因子'
+                },
+                series: [
+                    {
+                        name: '水平波峰因子',
+                        type: 'line',
+                        data: hCf,
+                        smooth: true,
+                        symbol: 'none',
+                        lineStyle: { color: '#8e44ad', width: 1.5 }
+                    },
+                    {
+                        name: '垂直波峰因子',
+                        type: 'line',
+                        data: vCf,
+                        smooth: true,
+                        symbol: 'none',
+                        lineStyle: { color: '#d35400', width: 1.5 }
+                    }
+                ]
+            });
+        }
+
+        // ============================================================
+        // Health Panel
+        // ============================================================
+        function updateHealthPanel(summary) {
+            const panel = document.getElementById('healthPanel');
+            const body = document.getElementById('healthReportBody');
+            document.getElementById('healthReportTime').textContent =
+                `报告生成时间: ${new Date().toLocaleString('zh-CN')}`;
+
+            panel.style.display = 'block';
+
+            const score = summary.health_score || 0;
+            let scoreColor, scoreText;
+            if (score >= 80) { scoreColor = '#52c41a'; scoreText = '健康'; }
+            else if (score >= 60) { scoreColor = '#faad14'; scoreText = '轻微退化'; }
+            else if (score >= 40) { scoreColor = '#fa8c16'; scoreText = '中度退化'; }
+            else if (score >= 20) { scoreColor = '#f5222d'; scoreText = '严重退化'; }
+            else { scoreColor = '#cf1322'; scoreText = '危险'; }
+
+            const freqs = summary.characteristic_frequencies || {};
+
+            body.innerHTML = `
+                <div class="health-score-circle" style="border-color: ${scoreColor}; color: ${scoreColor};">
+                    <div class="health-score-value">${score}</div>
+                    <div class="health-score-label">${scoreText}</div>
+                </div>
+                <div class="health-metrics">
+                    <div class="health-metric">
+                        <span class="metric-label">轴承编号</span>
+                        <span class="metric-value">${summary.bearing_no}</span>
+                    </div>
+                    <div class="health-metric">
+                        <span class="metric-label">工作条件</span>
+                        <span class="metric-value">${summary.condition_name} (${summary.radial_force_kN}kN, ${summary.rotating_speed_rpm}rpm)</span>
+                    </div>
+                    <div class="health-metric">
+                        <span class="metric-label">故障类型</span>
+                        <span class="metric-value">${summary.fault_type || '未标注'} ${summary.fault_element ? '- ' + summary.fault_element : ''}</span>
+                    </div>
+                    <div class="health-metric">
+                        <span class="metric-label">总采样批次</span>
+                        <span class="metric-value">${summary.total_samples || '--'}</span>
+                    </div>
+                    <div class="health-metric">
+                        <span class="metric-label">数据时间范围</span>
+                        <span class="metric-value">${summary.start_time || '--'} ~ ${summary.end_time || '--'}</span>
+                    </div>
+                    <div class="health-metric">
+                        <span class="metric-label">初期RMS (水平)</span>
+                        <span class="metric-value">${round4(summary.early_h_rms)} g</span>
+                    </div>
+                    <div class="health-metric">
+                        <span class="metric-label">末期RMS (水平)</span>
+                        <span class="metric-value">${round4(summary.late_h_rms)} g</span>
+                    </div>
+                    <div class="health-metric">
+                        <span class="metric-label">退化率 (水平)</span>
+                        <span class="metric-value" style="color: ${summary.h_degradation_pct > 50 ? '#e74c3c' : '#27ae60'}">${summary.h_degradation_pct}%</span>
+                    </div>
+                    <div class="health-metric">
+                        <span class="metric-label">退化率 (垂直)</span>
+                        <span class="metric-value" style="color: ${summary.v_degradation_pct > 50 ? '#e74c3c' : '#27ae60'}">${summary.v_degradation_pct}%</span>
+                    </div>
+                </div>
+                <div class="health-freqs">
+                    <h6>特征频率估算 <small class="text-muted">(基于轴承运动学)</small></h6>
+                    <div class="freq-grid">
+                        <div class="freq-item">
+                            <span class="freq-name">转频</span>
+                            <span class="freq-value">${freqs.rotating_freq_hz} Hz</span>
+                        </div>
+                        <div class="freq-item">
+                            <span class="freq-name">外圈故障 (BPFO)</span>
+                            <span class="freq-value">${freqs.bpfo_hz} Hz</span>
+                        </div>
+                        <div class="freq-item">
+                            <span class="freq-name">内圈故障 (BPFI)</span>
+                            <span class="freq-value">${freqs.bpfi_hz} Hz</span>
+                        </div>
+                        <div class="freq-item">
+                            <span class="freq-name">滚动体故障 (BSF)</span>
+                            <span class="freq-value">${freqs.bsf_hz} Hz</span>
+                        </div>
+                        <div class="freq-item">
+                            <span class="freq-name">保持架故障 (FTF)</span>
+                            <span class="freq-value">${freqs.ftf_hz} Hz</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ============================================================
+        // Initialize ECharts instances
+        // ============================================================
+        function initCharts() {
+            charts.vibration = echarts.init(document.getElementById('chartVibration'));
+            charts.rmsTrend = echarts.init(document.getElementById('chartRmsTrend'));
+            charts.health = echarts.init(document.getElementById('chartHealth'));
+            charts.statsBar = echarts.init(document.getElementById('chartStatsBar'));
+            charts.peakToPeak = echarts.init(document.getElementById('chartPeakToPeak'));
+            charts.crestFactor = echarts.init(document.getElementById('chartCrestFactor'));
+
+            // Responsive resize
+            window.addEventListener('resize', function() {
+                Object.values(charts).forEach(c => c && c.resize());
+            });
+
+            // Initialize empty charts (no placeholder text)
+        }
+
+        function clearCharts() {
+            showLoading(false);  // Dismiss any lingering spinner before clearing
+            Object.values(charts).forEach(c => {
+                if (c) {
+                    c.setOption({ series: [] }, true);
+                }
+            });
+            document.getElementById('healthPanel').style.display = 'none';
+            document.getElementById('chartBearingName').textContent = '--';
+        }
+
+        function showLoading(loading) {
+            if (loading) {
+                Object.values(charts).forEach(c => {
+                    if (c) c.showLoading({
+                        text: '加载中...',
+                        color: '#2980b9',
+                        maskColor: 'rgba(255, 255, 255, 0.8)'
+                    });
+                });
+            } else {
+                Object.values(charts).forEach(c => {
+                    if (c) c.hideLoading();
+                });
+            }
+        }
+
+        // ============================================================
+        // Utility functions
+        // ============================================================
+        function formatNumber(num) {
+            if (!num) return '0';
+            if (num >= 100000000) return (num / 100000000).toFixed(1) + '亿';
+            if (num >= 10000) return (num / 10000).toFixed(1) + '万';
+            return num.toLocaleString();
+        }
+
+        function round4(val) {
+            if (!val) return 0;
+            return Math.round(val * 10000) / 10000;
+        }
+
+        function getFaultColor(faultType) {
+            if (!faultType) return '#95a5a6';
+            const t = faultType.toLowerCase();
+            if (t.includes('inner') || t.includes('内圈')) return '#e74c3c';
+            if (t.includes('outer') || t.includes('外圈')) return '#f39c12';
+            if (t.includes('ball') || t.includes('滚动体') || t.includes('滚珠')) return '#2980b9';
+            if (t.includes('cage') || t.includes('保持架')) return '#8e44ad';
+            if (t.includes('wear') || t.includes('磨损')) return '#d35400';
+            if (t.includes('fatigue') || t.includes('疲劳')) return '#c0392b';
+            if (t.includes('fracture') || t.includes('断裂')) return '#7f8c8d';
+            if (t.includes('health') || t.includes('健康')) return '#27ae60';
+            if (t.includes('xjtu')) return '#2c3e50';
+            return '#3498db';
+        }
+    </script>
+</body>
+</html>

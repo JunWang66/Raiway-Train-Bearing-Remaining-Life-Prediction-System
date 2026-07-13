@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>轴承详情 - {{ bearing_no }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <link href="/static/css/style.css" rel="stylesheet">
+</head>
+<body>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <i class="bi bi-train-front"></i>
+            <span class="brand-text">轴承健康分析系统</span>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="/dashboard" class="nav-item">
+                <i class="bi bi-speedometer2"></i>
+                <span>系统仪表盘</span>
+            </a>
+            <a href="/comparison" class="nav-item">
+                <i class="bi bi-bar-chart-steps"></i>
+                <span>对比分析</span>
+            </a>
+            <div class="nav-divider"></div>
+            <a href="/dashboard" class="nav-item">
+                <i class="bi bi-arrow-left"></i>
+                <span>返回仪表盘</span>
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <i class="bi bi-person-circle"></i>
+                <span>{{ user.name if user else '用户' }}</span>
+            </div>
+            <button onclick="handleLogout()" class="btn-logout" title="退出登录">
+                <i class="bi bi-box-arrow-right"></i>
+            </button>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="topbar">
+            <button class="toggle-sidebar" onclick="toggleSidebar()">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="topbar-title" id="pageTitle">轴承详情 - {{ bearing_no }}</div>
+            <div class="topbar-right">
+                <span class="topbar-time" id="topbarTime"></span>
+            </div>
+        </header>
+
+        <div class="content-area">
+            <!-- Bearing info card -->
+            <div class="info-card" id="bearingInfoCard">
+                <div class="info-card-body" id="bearingInfoBody">
+                    <div class="text-center py-4 text-muted">加载中...</div>
+                </div>
+            </div>
+
+            <!-- Tab navigation -->
+            <div class="tab-nav">
+                <button class="tab-btn active" onclick="switchTab('timeDomain')">
+                    <i class="bi bi-graph-up"></i> 时域分析
+                </button>
+                <button class="tab-btn" onclick="switchTab('frequencyDomain')">
+                    <i class="bi bi-soundwave"></i> 频谱分析
+                </button>
+                <button class="tab-btn" onclick="switchTab('healthTrend')">
+                    <i class="bi bi-heart-pulse"></i> 健康趋势
+                </button>
+                <button class="tab-btn" onclick="switchTab('statistics')">
+                    <i class="bi bi-table"></i> 统计数据
+                </button>
+            </div>
+
+            <!-- Tab content -->
+            <div class="tab-content" id="tabTimeDomain">
+                <div class="chart-card">
+                    <div class="chart-card-header">
+                        <h5>振动信号时域波形</h5>
+                        <div class="chart-controls">
+                            <label>采样批次: <input type="number" id="sampleIndexInput" value="1" min="0" style="width: 80px;"></label>
+                            <button class="btn btn-sm btn-primary" onclick="loadSpectrumData()">查看频谱</button>
+                        </div>
+                    </div>
+                    <div class="chart-body" id="chartTimeDomain" style="height: 400px;"></div>
+                </div>
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <div class="chart-card-header"><h5>水平振动分布直方图</h5></div>
+                        <div class="chart-body" id="chartHDist" style="height: 300px;"></div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-card-header"><h5>垂直振动分布直方图</h5></div>
+                        <div class="chart-body" id="chartVDist" style="height: 300px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="tabFrequencyDomain" style="display: none;">
+                <div class="chart-card chart-card-wide">
+                    <div class="chart-card-header">
+                        <h5>振动频谱分析 (FFT)</h5>
+                        <div class="chart-controls">
+                            <label>采样批次: <input type="number" id="fftSampleIndex" value="1" min="0" style="width: 80px;"></label>
+                            <button class="btn btn-sm btn-primary" onclick="loadSpectrumChart()">分析</button>
+                        </div>
+                    </div>
+                    <div class="chart-body" id="chartSpectrum" style="height: 400px;"></div>
+                </div>
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <div class="chart-card-header"><h5>水平方向频谱</h5></div>
+                        <div class="chart-body" id="chartHSpectrum" style="height: 350px;"></div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-card-header"><h5>垂直方向频谱</h5></div>
+                        <div class="chart-body" id="chartVSpectrum" style="height: 350px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="tabHealthTrend" style="display: none;">
+                <div class="chart-card chart-card-wide">
+                    <div class="chart-card-header"><h5>健康评分变化趋势</h5></div>
+                    <div class="chart-body" id="chartHealthTrend" style="height: 400px;"></div>
+                </div>
+                <div class="charts-grid">
+                    <div class="chart-card">
+                        <div class="chart-card-header"><h5>RMS 退化趋势</h5></div>
+                        <div class="chart-body" id="chartRmsDegradation" style="height: 350px;"></div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-card-header"><h5>各阶段退化率对比</h5></div>
+                        <div class="chart-body" id="chartDegradationStages" style="height: 350px;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tab-content" id="tabStatistics" style="display: none;">
+                <div class="chart-card chart-card-wide">
+                    <div class="chart-card-header"><h5>统计数据总览</h5></div>
+                    <div style="overflow-x: auto; padding: 16px;">
+                        <table class="data-table" id="statsTable">
+                            <thead>
+                                <tr>
+                                    <th>样本序号</th><th>时间</th>
+                                    <th>水平RMS</th><th>垂直RMS</th>
+                                    <th>水平峰值</th><th>垂直峰值</th>
+                                    <th>水平峰峰值</th><th>垂直峰峰值</th>
+                                    <th>水平波峰因子</th><th>垂直波峰因子</th>
+                                </tr>
+                            </thead>
+                            <tbody id="statsTableBody">
+                                <tr><td colspan="10" class="text-center text-muted">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="pagination-bar" id="statsPagination"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const BEARING_NO = '{{ bearing_no }}';
+        let charts = {};
+        let currentTab = 'timeDomain';
+        let statsPage = 1;
+        let cachedStatsData = null;
+
+        // ============================================================
+        // Utility: fetch with timeout
+        // ============================================================
+        function fetchWithTimeout(url, timeoutMs = 15000) {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), timeoutMs);
+            return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timeout));
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initDetailCharts();
+            loadBearingInfo();
+            loadAllCharts();
+            updateTime();
+            setInterval(updateTime, 10000);
+        });
+
+        function updateTime() {
+            document.getElementById('topbarTime').textContent = new Date().toLocaleString('zh-CN');
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        }
+
+        async function handleLogout() {
+            try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+            window.location.href = '/login';
+        }
+
+        // ============================================================
+        // Bearing Info
+        // ============================================================
+        async function loadBearingInfo() {
+            try {
+                const resp = await fetch(`/api/bearing/${BEARING_NO}`);
+                const data = await resp.json();
+                document.getElementById('bearingInfoBody').innerHTML = `
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="info-label">轴承编号</span>
+                            <span class="info-value highlight">${data.bearing_no}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">数据集</span>
+                            <span class="info-value">${data.fault_type || '--'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">故障元件</span>
+                            <span class="info-value">${data.fault_element || '未标注'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">工作条件</span>
+                            <span class="info-value">${data.condition_name} (${data.radial_force_kN}kN, ${data.rotating_speed_rpm}rpm)</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">采样频率</span>
+                            <span class="info-value">${data.sampling_frequency_hz} Hz</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">采样批次</span>
+                            <span class="info-value">${data.total_samples || '--'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">数据点总数</span>
+                            <span class="info-value">${(data.data_points || 0).toLocaleString()}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">时间范围</span>
+                            <span class="info-value">${data.start_time || '--'} ~ ${data.end_time || '--'}</span>
+                        </div>
+                    </div>
+                `;
+            } catch (e) {
+                console.error('Failed to load bearing info:', e);
+            }
+        }
+
+        // ============================================================
+        // Load all charts
+        // ============================================================
+        async function loadAllCharts() {
+            try {
+                const [aggResp, healthResp, summaryResp] = await Promise.all([
+                    fetchWithTimeout(`/api/bearing/${BEARING_NO}/aggregate_stats?limit=500`),
+                    fetchWithTimeout(`/api/bearing/${BEARING_NO}/health_score?limit=500`),
+                    fetchWithTimeout(`/api/bearing/${BEARING_NO}/health_summary`)
+                ]);
+
+                const aggData = await aggResp.json();
+                const healthData = await healthResp.json();
+                const summaryData = await summaryResp.json();
+
+                // Cache for stats table pagination
+                cachedStatsData = aggData;
+
+                updateTimeDomainChart(aggData);
+                updateHealthTrendChart(healthData);
+                updateRmsDegradationChart(aggData);
+                updateDegradationStagesChart(aggData);
+                updateStatsTable(aggData);
+
+            } catch (e) {
+                if (e.name === 'AbortError') {
+                    console.error('Request timed out');
+                } else {
+                    console.error('Failed to load chart data:', e);
+                }
+            }
+        }
+
+        // ============================================================
+        // Time Domain Chart
+        // ============================================================
+        function updateTimeDomainChart(aggData) {
+            const chart = charts.timeDomain;
+            if (!chart) return;
+
+            const stats = aggData.stats || [];
+            const times = stats.map(s => s.timestamp);
+            const hRms = stats.map(s => s.h_rms);
+            const vRms = stats.map(s => s.v_rms);
+
+            chart.setOption({
+                tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+                legend: { data: ['水平RMS', '垂直RMS', '水平峰峰值', '垂直峰峰值'], top: 5 },
+                grid: { left: 55, right: 30, top: 45, bottom: 55 },
+                dataZoom: [
+                    { type: 'inside', start: 0, end: 100 },
+                    { type: 'slider', start: 0, end: 100, height: 25, bottom: 10 }
+                ],
+                xAxis: { type: 'category', data: times, axisLabel: { rotate: 45, fontSize: 9 }, name: '采样时间' },
+                yAxis: { type: 'value', name: '振幅 (g)', axisLabel: { fontSize: 10 } },
+                series: [
+                    {
+                        name: '水平RMS', type: 'line', data: hRms, smooth: true, symbol: 'none',
+                        lineStyle: { color: '#2980b9', width: 2 }, areaStyle: { opacity: 0.1, color: '#2980b9' }
+                    },
+                    {
+                        name: '垂直RMS', type: 'line', data: vRms, smooth: true, symbol: 'none',
+                        lineStyle: { color: '#e74c3c', width: 2 }, areaStyle: { opacity: 0.1, color: '#e74c3c' }
+                    },
+                    {
+                        name: '水平峰峰值', type: 'line',
+                        data: stats.map(s => s.h_pp), smooth: true, symbol: 'none',
+                        lineStyle: { color: '#85c1e9', width: 1, type: 'dashed' }
+                    },
+                    {
+                        name: '垂直峰峰值', type: 'line',
+                        data: stats.map(s => s.v_pp), smooth: true, symbol: 'none',
+                        lineStyle: { color: '#f1948a', width: 1, type: 'dashed' }
+                    }
+                ]
+            });
+
+            // Update distribution charts
+            const allHVals = stats.map(s => s.h_rms);
+            const allVVals = stats.map(s => s.v_rms);
+
+            updateHistogram(charts.hDist, allHVals, '水平RMS分布', '#2980b9');
+            updateHistogram(charts.vDist, allVVals, '垂直RMS分布', '#e74c3c');
+        }
+
+        function updateHistogram(chart, data, title, color) {
+            if (!chart || !data.length) return;
+
+            const min = Math.min(...data);
+            const max = Math.max(...data);
+            const range = max - min || 1;
+            const binCount = 30;
+            const binWidth = range / binCount;
+            const bins = new Array(binCount).fill(0);
+            const binLabels = [];
+
+            for (let i = 0; i < binCount; i++) {
+                const binStart = min + i * binWidth;
+                binLabels.push(binStart.toFixed(4));
+            }
+
+            data.forEach(v => {
+                const idx = Math.min(Math.floor((v - min) / binWidth), binCount - 1);
+                bins[idx]++;
+            });
+
+            chart.setOption({
+                tooltip: { trigger: 'axis' },
+                grid: { left: 50, right: 20, top: 15, bottom: 40 },
+                xAxis: {
+                    type: 'category',
+                    data: binLabels,
+                    axisLabel: { rotate: 45, fontSize: 8, interval: 4 }
+                },
+                yAxis: { type: 'value', name: '频次' },
+                series: [{
+                    type: 'bar', data: bins,
+                    itemStyle: { color: color, borderRadius: [3, 3, 0, 0] },
+                    barWidth: '95%'
+                }]
+            });
+        }
+
+        // ============================================================
+        // Spectrum Chart
+        // ============================================================
+        async function loadSpectrumChart() {
+            const sampleIdx = document.getElementById('fftSampleIndex').value || 1;
+            const chart = charts.spectrum;
+            if (!chart) return;
+
+            chart.showLoading({ text: '频谱计算中...', maskColor: 'rgba(255,255,255,0.9)' });
+
+            try {
+                const resp = await fetch(`/api/bearing/${BEARING_NO}/spectrum?sample_index=${sampleIdx}`);
+                const data = await resp.json();
+
+                const hFreqs = data.horizontal_spectrum.map(s => s.frequency);
+                const hMags = data.horizontal_spectrum.map(s => s.magnitude);
+                const vFreqs = data.vertical_spectrum.map(s => s.frequency);
+                const vMags = data.vertical_spectrum.map(s => s.magnitude);
+
+                chart.setOption({
+                    tooltip: { trigger: 'axis' },
+                    legend: { data: ['水平方向', '垂直方向'], top: 5 },
+                    grid: { left: 55, right: 25, top: 40, bottom: 50 },
+                    dataZoom: [
+                        { type: 'inside', start: 0, end: 30 },
+                        { type: 'slider', start: 0, end: 30, height: 20, bottom: 10 }
+                    ],
+                    xAxis: { type: 'value', name: '频率 (Hz)', axisLabel: { fontSize: 10 } },
+                    yAxis: { type: 'value', name: '幅值', axisLabel: { fontSize: 10 } },
+                    series: [
+                        {
+                            name: '水平方向', type: 'line',
+                            data: hFreqs.map((f, i) => [f, hMags[i]]),
+                            symbol: 'none', lineStyle: { color: '#2980b9', width: 1 }
+                        },
+                        {
+                            name: '垂直方向', type: 'line',
+                            data: vFreqs.map((f, i) => [f, vMags[i]]),
+                            symbol: 'none', lineStyle: { color: '#e74c3c', width: 1 }
+                        }
+                    ]
+                });
+
+                // Also update separate H/V spectrum charts
+                if (charts.hSpectrum) {
+                    charts.hSpectrum.setOption({
+                        tooltip: { trigger: 'axis' },
+                        grid: { left: 55, right: 20, top: 15, bottom: 45 },
+                        dataZoom: [{ type: 'inside', start: 0, end: 20 }, { type: 'slider', height: 18, bottom: 8 }],
+                        xAxis: { type: 'value', name: '频率 (Hz)' },
+                        yAxis: { type: 'value', name: '幅值' },
+                        series: [{
+                            type: 'line', data: hFreqs.map((f, i) => [f, hMags[i]]),
+                            symbol: 'none', lineStyle: { color: '#2980b9', width: 1 },
+                            areaStyle: { opacity: 0.2, color: '#2980b9' }
+                        }]
+                    });
+                }
+                if (charts.vSpectrum) {
+                    charts.vSpectrum.setOption({
+                        tooltip: { trigger: 'axis' },
+                        grid: { left: 55, right: 20, top: 15, bottom: 45 },
+                        dataZoom: [{ type: 'inside', start: 0, end: 20 }, { type: 'slider', height: 18, bottom: 8 }],
+                        xAxis: { type: 'value', name: '频率 (Hz)' },
+                        yAxis: { type: 'value', name: '幅值' },
+                        series: [{
+                            type: 'line', data: vFreqs.map((f, i) => [f, vMags[i]]),
+                            symbol: 'none', lineStyle: { color: '#e74c3c', width: 1 },
+                            areaStyle: { opacity: 0.2, color: '#e74c3c' }
+                        }]
+                    });
+                }
+
+            } catch (e) {
+                console.error('Spectrum loading failed:', e);
+            } finally {
+                chart.hideLoading();
+            }
+        }
+
+        async function loadSpectrumData() {
+            document.getElementById('fftSampleIndex').value = document.getElementById('sampleIndexInput').value;
+            switchTab('frequencyDomain');
+            setTimeout(loadSpectrumChart, 300);
+        }
+
+        // ============================================================
+        // Health Trend
+        // ============================================================
+        function updateHealthTrendChart(healthData) {
+            const chart = charts.healthTrend;
+            if (!chart) return;
+
+            const hd = healthData.health_data || [];
+            const times = hd.map(h => h.timestamp);
+            const scores = hd.map(h => h.health_score);
+            const hDevs = hd.map(h => h.h_deviation_pct);
+            const vDevs = hd.map(h => h.v_deviation_pct);
+
+            chart.setOption({
+                tooltip: { trigger: 'axis' },
+                legend: { data: ['健康评分', '水平偏差%', '垂直偏差%'], top: 5 },
+                grid: { left: 55, right: 60, top: 40, bottom: 55 },
+                dataZoom: [{ type: 'inside' }, { type: 'slider', height: 20, bottom: 10 }],
+                xAxis: { type: 'category', data: times, axisLabel: { rotate: 45, fontSize: 9 } },
+                yAxis: [
+                    { type: 'value', name: '健康评分', min: 0, max: 100, axisLabel: { fontSize: 10 } },
+                    { type: 'value', name: '偏差 (%)', axisLabel: { fontSize: 10 } }
+                ],
+                series: [
+                    {
+                        name: '健康评分', type: 'line', yAxisIndex: 0,
+                        data: scores, smooth: true, symbol: 'circle', symbolSize: 5,
+                        lineStyle: { width: 3 },
+                        markLine: {
+                            silent: true,
+                            data: [
+                                { yAxis: 80, label: { formatter: '健康' }, lineStyle: { color: '#52c41a' } },
+                                { yAxis: 60, label: { formatter: '注意' }, lineStyle: { color: '#faad14' } },
+                                { yAxis: 40, label: { formatter: '警告' }, lineStyle: { color: '#f5222d' } }
+                            ]
+                        }
+                    },
+                    {
+                        name: '水平偏差%', type: 'line', yAxisIndex: 1,
+                        data: hDevs, smooth: true, symbol: 'none',
+                        lineStyle: { color: '#2980b9', width: 1, type: 'dashed' }
+                    },
+                    {
+                        name: '垂直偏差%', type: 'line', yAxisIndex: 1,
+                        data: vDevs, smooth: true, symbol: 'none',
+                        lineStyle: { color: '#e74c3c', width: 1, type: 'dashed' }
+                    }
+                ]
+            });
+        }
+
+        function updateRmsDegradationChart(aggData) {
+            const chart = charts.rmsDegradation;
+            if (!chart) return;
+
+            const stats = aggData.stats || [];
+            const times = stats.map(s => s.timestamp);
+            const hRms = stats.map(s => s.h_rms);
+            const vRms = stats.map(s => s.v_rms);
+
+            // Calculate trend lines
+            const hTrend = linearRegression(stats.map((s, i) => [i, s.h_rms]));
+            const vTrend = linearRegression(stats.map((s, i) => [i, s.v_rms]));
+
+            chart.setOption({
+                tooltip: { trigger: 'axis' },
+                legend: { data: ['水平RMS', '垂直RMS', '水平趋势', '垂直趋势'], top: 5 },
+                grid: { left: 55, right: 25, top: 40, bottom: 50 },
+                dataZoom: [{ type: 'inside' }, { type: 'slider', height: 18, bottom: 10 }],
+                xAxis: { type: 'category', data: times, axisLabel: { rotate: 45, fontSize: 9 } },
+                yAxis: { type: 'value', name: 'RMS (g)' },
+                series: [
+                    { name: '水平RMS', type: 'line', data: hRms, smooth: true, symbol: 'none', lineStyle: { color: '#2980b9', width: 1.5 } },
+                    { name: '垂直RMS', type: 'line', data: vRms, smooth: true, symbol: 'none', lineStyle: { color: '#e74c3c', width: 1.5 } },
+                    { name: '水平趋势', type: 'line', data: hTrend.map(v => v || null), symbol: 'none', lineStyle: { color: '#2980b9', width: 2, type: 'dotted' } },
+                    { name: '垂直趋势', type: 'line', data: vTrend.map(v => v || null), symbol: 'none', lineStyle: { color: '#e74c3c', width: 2, type: 'dotted' } }
+                ]
+            });
+        }
+
+        function updateDegradationStagesChart(aggData) {
+            const chart = charts.degradationStages;
+            if (!chart) return;
+
+            const stats = aggData.stats || [];
+            if (stats.length < 10) return;
+
+            // Divide into 4 stages
+            const n = stats.length;
+            const stageSize = Math.floor(n / 4);
+            const stages = [
+                stats.slice(0, stageSize),
+                stats.slice(stageSize, stageSize * 2),
+                stats.slice(stageSize * 2, stageSize * 3),
+                stats.slice(stageSize * 3)
+            ];
+
+            const stageLabels = ['初期阶段', '中期阶段', '后期阶段', '末期阶段'];
+            const hAvgRms = stages.map(s => s.reduce((a, x) => a + x.h_rms, 0) / s.length);
+            const vAvgRms = stages.map(s => s.reduce((a, x) => a + x.v_rms, 0) / s.length);
+            const hAvgPeak = stages.map(s => s.reduce((a, x) => a + x.h_peak, 0) / s.length);
+            const vAvgPeak = stages.map(s => s.reduce((a, x) => a + x.v_peak, 0) / s.length);
+
+            chart.setOption({
+                tooltip: { trigger: 'axis' },
+                legend: { data: ['水平RMS', '垂直RMS', '水平峰值', '垂直峰值'], top: 5 },
+                grid: { left: 55, right: 25, top: 40, bottom: 40 },
+                xAxis: { type: 'category', data: stageLabels },
+                yAxis: { type: 'value', name: '振幅 (g)' },
+                series: [
+                    { name: '水平RMS', type: 'bar', data: hAvgRms.map(v => round4(v)), itemStyle: { color: '#2980b9' } },
+                    { name: '垂直RMS', type: 'bar', data: vAvgRms.map(v => round4(v)), itemStyle: { color: '#e74c3c' } },
+                    { name: '水平峰值', type: 'line', data: hAvgPeak.map(v => round4(v)), symbol: 'diamond', symbolSize: 8, lineStyle: { color: '#5dade2', width: 2 } },
+                    { name: '垂直峰值', type: 'line', data: vAvgPeak.map(v => round4(v)), symbol: 'diamond', symbolSize: 8, lineStyle: { color: '#ec7063', width: 2 } }
+                ]
+            });
+        }
+
+        // ============================================================
+        // Statistics Table
+        // ============================================================
+        function updateStatsTable(aggData) {
+            const stats = aggData.stats || [];
+            const tbody = document.getElementById('statsTableBody');
+            const pageSize = 20;
+            const totalPages = Math.ceil(stats.length / pageSize);
+            const start = (statsPage - 1) * pageSize;
+            const pageData = stats.slice(start, start + pageSize);
+
+            tbody.innerHTML = pageData.map(s => `
+                <tr>
+                    <td>${s.sample_index}</td>
+                    <td>${s.timestamp}</td>
+                    <td>${round4(s.h_rms)}</td>
+                    <td>${round4(s.v_rms)}</td>
+                    <td>${round4(s.h_peak)}</td>
+                    <td>${round4(s.v_peak)}</td>
+                    <td>${round4(s.h_pp)}</td>
+                    <td>${round4(s.v_pp)}</td>
+                    <td>${s.h_crest_factor}</td>
+                    <td>${s.v_crest_factor}</td>
+                </tr>
+            `).join('');
+
+            // Pagination
+            let pagHtml = '';
+            for (let i = 1; i <= totalPages; i++) {
+                pagHtml += `<button class="page-btn ${i === statsPage ? 'active' : ''}" onclick="goStatsPage(${i})">${i}</button>`;
+            }
+            document.getElementById('statsPagination').innerHTML = `
+                <span>共 ${stats.length} 条记录，${totalPages} 页</span>
+                <div class="page-btns">${pagHtml}</div>
+            `;
+        }
+
+        function goStatsPage(page) {
+            statsPage = page;
+            if (cachedStatsData) {
+                updateStatsTable(cachedStatsData);
+            } else {
+                loadAllCharts();
+            }
+        }
+
+        // ============================================================
+        // Tab switching
+        // ============================================================
+        function switchTab(tabName) {
+            currentTab = tabName;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+
+            const tabMap = {
+                'timeDomain': 0,
+                'frequencyDomain': 1,
+                'healthTrend': 2,
+                'statistics': 3
+            };
+            document.querySelectorAll('.tab-btn')[tabMap[tabName]].classList.add('active');
+            document.getElementById('tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1)).style.display = 'block';
+
+            // Resize charts after displaying tab
+            setTimeout(() => {
+                Object.values(charts).forEach(c => {
+                    if (c) c.resize();
+                });
+            }, 100);
+        }
+
+        // ============================================================
+        // Init Charts
+        // ============================================================
+        function initDetailCharts() {
+            charts.timeDomain = echarts.init(document.getElementById('chartTimeDomain'));
+            charts.hDist = echarts.init(document.getElementById('chartHDist'));
+            charts.vDist = echarts.init(document.getElementById('chartVDist'));
+            charts.spectrum = echarts.init(document.getElementById('chartSpectrum'));
+            charts.hSpectrum = echarts.init(document.getElementById('chartHSpectrum'));
+            charts.vSpectrum = echarts.init(document.getElementById('chartVSpectrum'));
+            charts.healthTrend = echarts.init(document.getElementById('chartHealthTrend'));
+            charts.rmsDegradation = echarts.init(document.getElementById('chartRmsDegradation'));
+            charts.degradationStages = echarts.init(document.getElementById('chartDegradationStages'));
+
+            window.addEventListener('resize', () => {
+                Object.values(charts).forEach(c => c && c.resize());
+            });
+
+            // Placeholders
+            Object.entries(charts).forEach(([key, chart]) => {
+                if (['timeDomain', 'spectrum', 'healthTrend', 'rmsDegradation'].includes(key)) {
+                    chart.setOption({
+                        title: { text: '加载中...', left: 'center', top: 'center', textStyle: { color: '#bdc3c7', fontSize: 16 } }
+                    });
+                }
+            });
+        }
+
+        // ============================================================
+        // Utilities
+        // ============================================================
+        function linearRegression(points) {
+            const n = points.length;
+            if (n < 2) return points.map(p => p[1]);
+
+            let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+            points.forEach(([x, y]) => {
+                sumX += x;
+                sumY += y;
+                sumXY += x * y;
+                sumX2 += x * x;
+            });
+
+            const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+            const intercept = (sumY - slope * sumX) / n;
+
+            return points.map(([x]) => intercept + slope * x);
+        }
+
+        function round4(val) {
+            if (!val) return 0;
+            return Math.round(val * 10000) / 10000;
+        }
+    </script>
+</body>
+</html>

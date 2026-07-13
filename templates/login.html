@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>铁路轴承健康状态分析系统 - 登录</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #1a3a5c;
+            --primary-light: #2c5f8a;
+            --accent: #e74c3c;
+            --bg: #f0f2f5;
+            --card-bg: #ffffff;
+            --text: #2c3e50;
+            --text-secondary: #7f8c8d;
+            --border: #e1e8ed;
+            --success: #27ae60;
+            --warning: #f39c12;
+            --danger: #e74c3c;
+            --info: #2980b9;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #1a3a5c 0%, #2c5f8a 50%, #1a3a5c 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Background decorative elements */
+        body::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background:
+                radial-gradient(ellipse at 20% 50%, rgba(255,255,255,0.05) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(255,255,255,0.03) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 80%, rgba(255,255,255,0.04) 0%, transparent 50%);
+            animation: bgPulse 15s ease-in-out infinite;
+        }
+
+        @keyframes bgPulse {
+            0%, 100% { transform: translate(0, 0); }
+            50% { transform: translate(-2%, -1%); }
+        }
+
+        .login-wrapper {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 450px;
+            padding: 20px;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-header .logo-icon {
+            width: 80px;
+            height: 80px;
+            background: rgba(255,255,255,0.1);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 36px;
+            color: #fff;
+            backdrop-filter: blur(10px);
+        }
+
+        .login-header h1 {
+            color: #ffffff;
+            font-size: 24px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            margin-bottom: 5px;
+        }
+
+        .login-header p {
+            color: rgba(255,255,255,0.7);
+            font-size: 14px;
+            letter-spacing: 1px;
+        }
+
+        .login-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        .login-card .card-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text);
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .input-group {
+            display: flex;
+            align-items: center;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            transition: all 0.3s;
+            overflow: hidden;
+        }
+
+        .input-group:focus-within {
+            border-color: var(--primary-light);
+            box-shadow: 0 0 0 3px rgba(44, 95, 138, 0.1);
+        }
+
+        .input-group .input-icon {
+            padding: 12px 14px;
+            color: var(--text-secondary);
+            font-size: 16px;
+            background: #f8f9fa;
+            border-right: 1px solid var(--border);
+        }
+
+        .input-group input {
+            flex: 1;
+            border: none;
+            outline: none;
+            padding: 12px 16px;
+            font-size: 15px;
+            color: var(--text);
+            background: transparent;
+            width: 100%;
+        }
+
+        .input-group input::placeholder {
+            color: #bdc3c7;
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #1a3a5c, #2c5f8a);
+            color: #fff;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 10px;
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(26, 58, 92, 0.3);
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
+        .btn-login:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 14px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .alert.show {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .alert-danger {
+            background: #fdf0ed;
+            color: #e74c3c;
+            border: 1px solid #fadbd8;
+        }
+
+        .demo-accounts {
+            margin-top: 24px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .demo-accounts .demo-title {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-align: center;
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+        }
+
+        .demo-accounts .demo-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .demo-account-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+        }
+
+        .demo-account-item:hover {
+            background: #e9ecef;
+            transform: translateX(3px);
+        }
+
+        .demo-account-item .role-badge {
+            font-size: 10px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .demo-account-item .role-badge.admin { background: #e74c3c; }
+        .demo-account-item .role-badge.engineer { background: #2980b9; }
+        .demo-account-item .role-badge.viewer { background: #27ae60; }
+
+        .footer-text {
+            text-align: center;
+            color: rgba(255,255,255,0.5);
+            font-size: 12px;
+            margin-top: 24px;
+            letter-spacing: 1px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-wrapper">
+        <div class="login-header">
+            <div class="logo-icon">
+                <i class="bi bi-train-front"></i>
+            </div>
+            <h1>铁路轴承健康状态分析系统</h1>
+            <p>Railway Bearing Health Analysis System</p>
+        </div>
+
+        <div class="login-card">
+            <div class="card-title">
+                <i class="bi bi-shield-lock"></i> 用户登录
+            </div>
+
+            <div id="errorAlert" class="alert alert-danger">
+                <i class="bi bi-exclamation-triangle"></i>
+                <span id="errorMessage"></span>
+            </div>
+
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <div class="input-group">
+                        <span class="input-icon"><i class="bi bi-person"></i></span>
+                        <input type="text" id="username" placeholder="请输入用户名" autocomplete="username" required autofocus>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>密码</label>
+                    <div class="input-group">
+                        <span class="input-icon"><i class="bi bi-key"></i></span>
+                        <input type="password" id="password" placeholder="请输入密码" autocomplete="current-password" required>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-login" id="loginBtn">
+                    <i class="bi bi-box-arrow-in-right"></i> 登 录
+                </button>
+            </form>
+
+            <div class="demo-accounts">
+                <div class="demo-title">— 演示账号（点击快速填入） —</div>
+                <div class="demo-list">
+                    <div class="demo-account-item" onclick="fillAccount('admin', 'admin123')">
+                        <span><i class="bi bi-person-badge"></i> admin / admin123</span>
+                        <span class="role-badge admin">系统管理员</span>
+                    </div>
+                    <div class="demo-account-item" onclick="fillAccount('engineer', 'engineer123')">
+                        <span><i class="bi bi-person-badge"></i> engineer / engineer123</span>
+                        <span class="role-badge engineer">检修工程师</span>
+                    </div>
+                    <div class="demo-account-item" onclick="fillAccount('viewer', 'viewer123')">
+                        <span><i class="bi bi-person-badge"></i> viewer / viewer123</span>
+                        <span class="role-badge viewer">数据分析师</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer-text">
+            © 2026 Railway Bearing Health Analysis · XJTU-SY Dataset · Prototype System v1.0
+        </div>
+    </div>
+
+    <script>
+        function fillAccount(username, password) {
+            document.getElementById('username').value = username;
+            document.getElementById('password').value = password;
+            document.getElementById('username').focus();
+        }
+
+        async function handleLogin(event) {
+            event.preventDefault();
+
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+            const btn = document.getElementById('loginBtn');
+            const errorAlert = document.getElementById('errorAlert');
+            const errorMessage = document.getElementById('errorMessage');
+
+            if (!username || !password) {
+                showError('请输入用户名和密码');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 登录中...';
+            errorAlert.classList.remove('show');
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    btn.innerHTML = '<i class="bi bi-check-circle"></i> 登录成功';
+                    btn.style.background = 'linear-gradient(135deg, #27ae60, #2ecc71)';
+                    setTimeout(() => {
+                        window.location.href = data.redirect || '/dashboard';
+                    }, 600);
+                } else {
+                    showError(data.error || '登录失败，请重试');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> 登 录';
+                }
+            } catch (err) {
+                showError('网络连接失败，请检查服务是否启动');
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-box-arrow-in-right"></i> 登 录';
+            }
+        }
+
+        function showError(msg) {
+            const errorAlert = document.getElementById('errorAlert');
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = msg;
+            errorAlert.classList.add('show');
+        }
+
+        // Enter key to submit
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                handleLogin(e);
+            }
+        });
+    </script>
+</body>
+</html>
