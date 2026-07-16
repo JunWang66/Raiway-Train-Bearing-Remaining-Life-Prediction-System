@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>故障类型 - 铁路列车轴承剩余寿命预测系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <link href="/static/css/style.css" rel="stylesheet">
+    <style>
+        .fault-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 20px; }
+        .fault-card {
+            background: #fff; border-radius: 12px; border: 1px solid #e1e8ed;
+            overflow: hidden; transition: box-shadow 0.2s;
+        }
+        .fault-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+        .fault-card-header {
+            padding: 18px 20px; font-weight: 600; font-size: 16px;
+            display: flex; align-items: center; gap: 12px;
+        }
+        .fault-card-body { padding: 0 20px 18px; }
+        .fault-count {
+            font-size: 28px; font-weight: 700; margin-bottom: 2px;
+        }
+        .fault-count-label { font-size: 12px; color: #7f8c8d; }
+        .bearing-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+        .bearing-tag {
+            display: inline-block; padding: 3px 10px; border-radius: 20px;
+            font-size: 12px; color: #2980b9; background: #e8f4fd;
+            text-decoration: none; transition: background 0.15s;
+        }
+        .bearing-tag:hover { background: #d1ecf9; color: #1a6d9f; }
+        .fault-color-dot {
+            width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0;
+        }
+    </style>
+</head>
+<body>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <i class="bi bi-train-front"></i>
+            <span class="brand-text">铁路列车轴承剩余寿命预测系统</span>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="/dashboard" class="nav-item">
+                <i class="bi bi-speedometer2"></i>
+                <span>系统仪表盘</span>
+            </a>
+            <a href="/comparison" class="nav-item">
+                <i class="bi bi-bar-chart-steps"></i>
+                <span>对比分析</span>
+            </a>
+            <a href="/rul" class="nav-item">
+                <i class="bi bi-hourglass-split"></i>
+                <span>剩余寿命预测</span>
+            </a>
+            <div class="nav-divider"></div>
+            <a href="/bearings" class="nav-item">
+                <i class="bi bi-gear"></i>
+                <span>轴承列表</span>
+            </a>
+            <a href="/conditions" class="nav-item">
+                <i class="bi bi-sliders"></i>
+                <span>工作条件</span>
+            </a>
+            <a href="/faults" class="nav-item active">
+                <i class="bi bi-exclamation-triangle"></i>
+                <span>故障类型</span>
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <i class="bi bi-person-circle"></i>
+                <span>{{ user.name if user else '用户' }}</span>
+            </div>
+            <button onclick="handleLogout()" class="btn-logout" title="退出登录">
+                <i class="bi bi-box-arrow-right"></i>
+            </button>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="topbar">
+            <button class="toggle-sidebar" onclick="toggleSidebar()">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="topbar-title">故障类型分析</div>
+            <div class="topbar-right">
+                <span class="topbar-time" id="topbarTime"></span>
+            </div>
+        </header>
+
+        <div class="content-area">
+            <!-- Pie Chart -->
+            <div class="charts-grid">
+                <div class="chart-card">
+                    <div class="chart-card-header">
+                        <h5><i class="bi bi-pie-chart"></i> 故障类型分布</h5>
+                    </div>
+                    <div class="chart-body" id="chartFaultPie" style="height: 400px;"></div>
+                </div>
+                <div class="chart-card">
+                    <div class="chart-card-header">
+                        <h5><i class="bi bi-diagram-3"></i> 故障类型统计</h5>
+                    </div>
+                    <div style="padding: 16px; max-height: 400px; overflow-y: auto;">
+                        <table class="data-table" style="width: 100%;">
+                            <thead>
+                                <tr><th>故障类型</th><th>轴承数</th><th>占比</th></tr>
+                            </thead>
+                            <tbody id="faultTableBody">
+                                <tr><td colspan="3" class="text-center text-muted">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Fault Cards -->
+            <div class="chart-card" style="margin-top: 0;">
+                <div class="chart-card-header">
+                    <h5><i class="bi bi-grid-3x3"></i> 故障类型详情</h5>
+                </div>
+                <div style="padding: 16px;">
+                    <div class="fault-grid" id="faultGrid">
+                        <div class="text-center py-4 text-muted" style="grid-column: 1/-1;">加载中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let faultChart = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            faultChart = echarts.init(document.getElementById('chartFaultPie'));
+            window.addEventListener('resize', () => faultChart && faultChart.resize());
+            loadFaultData();
+            updateTime();
+            setInterval(updateTime, 10000);
+        });
+
+        function updateTime() {
+            document.getElementById('topbarTime').textContent = new Date().toLocaleString('zh-CN');
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        }
+
+        async function handleLogout() {
+            try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+            window.location.href = '/login';
+        }
+
+        async function loadFaultData() {
+            try {
+                const resp = await fetch('/api/fault_types');
+                const data = await resp.json();
+                const faultTypes = data.fault_types;
+                const total = faultTypes.reduce((s, f) => s + f.bearing_count, 0);
+
+                // Update pie chart
+                const colors = ['#e74c3c', '#f39c12', '#2980b9', '#8e44ad', '#27ae60',
+                               '#d35400', '#c0392b', '#7f8c8d', '#16a085', '#2c3e50',
+                               '#e67e22', '#1abc9c', '#3498db', '#9b59b6'];
+
+                faultChart.setOption({
+                    title: null,
+                    tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+                    legend: {
+                        orient: 'vertical',
+                        left: 10,
+                        top: 'center',
+                        textStyle: { fontSize: 12 }
+                    },
+                    series: [{
+                        type: 'pie',
+                        radius: ['40%', '75%'],
+                        center: ['55%', '50%'],
+                        avoidLabelOverlap: false,
+                        itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+                        label: { show: true, formatter: '{b}\n{d}%', fontSize: 11 },
+                        emphasis: {
+                            label: { show: true, fontSize: 16, fontWeight: 'bold' }
+                        },
+                        data: faultTypes.map((f, i) => ({
+                            value: f.bearing_count,
+                            name: f.fault_type,
+                            itemStyle: { color: colors[i % colors.length] }
+                        }))
+                    }]
+                });
+
+                // Update table
+                document.getElementById('faultTableBody').innerHTML = faultTypes.map((f, i) => `
+                    <tr>
+                        <td>
+                            <span style="display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: ${colors[i % colors.length]}; margin-right: 8px;"></span>
+                            <strong>${f.fault_type}</strong>
+                        </td>
+                        <td>${f.bearing_count}</td>
+                        <td>${(f.bearing_count / total * 100).toFixed(1)}%</td>
+                    </tr>
+                `).join('');
+
+                // Update cards
+                document.getElementById('faultGrid').innerHTML = faultTypes.map((f, i) => `
+                    <div class="fault-card">
+                        <div class="fault-card-header" style="background: ${colors[i % colors.length]}08;">
+                            <span class="fault-color-dot" style="background: ${colors[i % colors.length]};"></span>
+                            ${f.fault_type}
+                        </div>
+                        <div class="fault-card-body">
+                            <div style="display: flex; align-items: baseline; gap: 8px;">
+                                <div class="fault-count" style="color: ${colors[i % colors.length]};">${f.bearing_count}</div>
+                                <div class="fault-count-label">个轴承 (${(f.bearing_count / total * 100).toFixed(1)}%)</div>
+                            </div>
+                            <div class="bearing-tags">
+                                ${f.bearings.map(bn => `
+                                    <a href="/bearing/${bn}" class="bearing-tag">${bn}</a>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+
+            } catch (e) {
+                console.error('Failed to load fault data:', e);
+                document.getElementById('faultGrid').innerHTML =
+                    '<div class="text-center py-4 text-danger" style="grid-column: 1/-1;">加载失败，请重试</div>';
+            }
+        }
+    </script>
+</body>
+</html>

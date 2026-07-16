@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>剩余寿命预测 - 铁路列车轴承剩余寿命预测系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+    <link href="/static/css/style.css" rel="stylesheet">
+</head>
+<body>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <i class="bi bi-train-front"></i>
+            <span class="brand-text">铁路列车轴承剩余寿命预测系统</span>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="/dashboard" class="nav-item">
+                <i class="bi bi-speedometer2"></i>
+                <span>系统仪表盘</span>
+            </a>
+            <a href="/comparison" class="nav-item">
+                <i class="bi bi-bar-chart-steps"></i>
+                <span>对比分析</span>
+            </a>
+            <a href="/rul" class="nav-item active">
+                <i class="bi bi-hourglass-split"></i>
+                <span>剩余寿命预测</span>
+            </a>
+            <div class="nav-divider"></div>
+            <a href="/bearings" class="nav-item">
+                <i class="bi bi-gear"></i>
+                <span>轴承列表</span>
+            </a>
+            <a href="/conditions" class="nav-item">
+                <i class="bi bi-sliders"></i>
+                <span>工作条件</span>
+            </a>
+            <a href="/faults" class="nav-item">
+                <i class="bi bi-exclamation-triangle"></i>
+                <span>故障类型</span>
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <i class="bi bi-person-circle"></i>
+                <span>{{ user.name if user else '用户' }}</span>
+            </div>
+            <button onclick="handleLogout()" class="btn-logout" title="退出登录">
+                <i class="bi bi-box-arrow-right"></i>
+            </button>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="topbar">
+            <button class="toggle-sidebar" onclick="toggleSidebar()">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="topbar-title">剩余寿命预测 (RUL)</div>
+            <div class="topbar-right">
+                <span class="topbar-time" id="topbarTime"></span>
+            </div>
+        </header>
+
+        <div class="content-area">
+            <!-- Control Panel -->
+            <div class="control-panel">
+                <div class="panel-title">
+                    <i class="bi bi-hourglass-split"></i> 剩余使用寿命预测
+                </div>
+                <div class="control-row">
+                    <div class="control-item" style="flex: 2;">
+                        <label>轴承选择</label>
+                        <select id="bearingSelect">
+                            <option value="">-- 请选择轴承 --</option>
+                        </select>
+                    </div>
+                    <div class="control-item">
+                        <label>数据点数</label>
+                        <select id="pointLimit" onchange="onBearingChange()">
+                            <option value="200">200 点</option>
+                            <option value="500" selected>500 点</option>
+                            <option value="1000">1000 点</option>
+                        </select>
+                    </div>
+                    <div class="control-item">
+                        <label>&nbsp;</label>
+                        <button class="btn btn-primary btn-sm" onclick="onBearingChange()">
+                            <i class="bi bi-arrow-repeat"></i> 刷新
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RUL Result Cards -->
+            <div class="stats-grid" id="rulStatsGrid" style="display: none;">
+                <div class="stat-card" id="rulScoreCard">
+                    <div class="stat-icon" style="background: #e8f4fd;">
+                        <i class="bi bi-heart-pulse" style="color: #2980b9;"></i>
+                    </div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="rulHealthScore">--</div>
+                        <div class="stat-label">当前健康评分</div>
+                    </div>
+                </div>
+                <div class="stat-card" id="rulPercentCard">
+                    <div class="stat-icon" style="background: #eafaf1;">
+                        <i class="bi bi-percent" style="color: #27ae60;"></i>
+                    </div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="rulPercent">--</div>
+                        <div class="stat-label">预估剩余寿命比例</div>
+                    </div>
+                </div>
+                <div class="stat-card" id="rulTimeCard">
+                    <div class="stat-icon" style="background: #fef9e7;">
+                        <i class="bi bi-clock-history" style="color: #f39c12;"></i>
+                    </div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="rulTimeText" style="font-size: 1.4rem;">--</div>
+                        <div class="stat-label">预估剩余时间</div>
+                    </div>
+                </div>
+                <div class="stat-card" id="rulStageCard">
+                    <div class="stat-icon" style="background: #fdedec;">
+                        <i class="bi bi-flag" style="color: #e74c3c;"></i>
+                    </div>
+                    <div class="stat-body">
+                        <div class="stat-value" id="rulStage">--</div>
+                        <div class="stat-label">退化阶段</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Maintenance Suggestion -->
+            <div class="chart-card" id="suggestionCard" style="display: none;">
+                <div class="chart-card-header">
+                    <h5><i class="bi bi-lightbulb"></i> 维护建议</h5>
+                </div>
+                <div style="padding: 16px;">
+                    <p id="rulSuggestion" style="font-size: 15px; line-height: 1.8; margin: 0;"></p>
+                </div>
+            </div>
+
+            <!-- Charts Grid -->
+            <div class="charts-grid">
+                <div class="chart-card chart-card-wide">
+                    <div class="chart-card-header">
+                        <h5><i class="bi bi-graph-up"></i> 全生命周期 RMS 退化趋势</h5>
+                    </div>
+                    <div class="chart-body" id="chartRmsTrend" style="height: 400px;"></div>
+                </div>
+
+                <div class="chart-card chart-card-wide">
+                    <div class="chart-card-header">
+                        <h5><i class="bi bi-heart-pulse"></i> 健康评分退化曲线 & RUL 预测</h5>
+                    </div>
+                    <div class="chart-body" id="chartHealthTrend" style="height: 400px;"></div>
+                </div>
+
+                <div class="chart-card">
+                    <div class="chart-card-header">
+                        <h5><i class="bi bi-bar-chart"></i> 初期 vs 当前状态对比</h5>
+                    </div>
+                    <div class="chart-body" id="chartCompareBar" style="height: 350px;"></div>
+                </div>
+
+                <div class="chart-card">
+                    <div class="chart-card-header">
+                        <h5><i class="bi bi-speedometer"></i> RUL 预测仪表盘</h5>
+                    </div>
+                    <div class="chart-body" id="chartGauge" style="height: 350px;"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let charts = {};
+        let currentRulData = null;
+        let bearingList = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            initCharts();
+            loadBearingList();
+            updateTime();
+            setInterval(updateTime, 10000);
+
+            document.getElementById('bearingSelect').addEventListener('change', function() {
+                clearTimeout(this._debounce);
+                this._debounce = setTimeout(() => onBearingChange(), 300);
+            });
+        });
+
+        function updateTime() {
+            document.getElementById('topbarTime').textContent = new Date().toLocaleString('zh-CN');
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        }
+
+        async function handleLogout() {
+            try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+            window.location.href = '/login';
+        }
+
+        async function loadBearingList() {
+            const select = document.getElementById('bearingSelect');
+            try {
+                const resp = await fetch('/api/bearings?dataset=all');
+                const data = await resp.json();
+                bearingList = data.bearings;
+
+                select.innerHTML = '<option value="">-- 请选择轴承 --</option>';
+                bearingList.forEach(b => {
+                    const opt = document.createElement('option');
+                    opt.value = b.bearing_no;
+                    opt.textContent = `${b.bearing_no} [${b.fault_type || '未知'}]`;
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('Failed to load bearings:', e);
+            }
+        }
+
+        async function onBearingChange() {
+            const bearingNo = document.getElementById('bearingSelect').value;
+            if (!bearingNo) {
+                clearCharts();
+                return;
+            }
+
+            const limit = document.getElementById('pointLimit').value;
+            showLoading(true);
+
+            try {
+                const resp = await fetch(`/api/bearing/${bearingNo}/rul_data?limit=${limit}`);
+                const data = await resp.json();
+                currentRulData = data;
+
+                updateResultCards(data);
+                updateRmsTrendChart(data);
+                updateHealthTrendChart(data);
+                updateCompareBarChart(data);
+                updateGaugeChart(data);
+
+            } catch (e) {
+                console.error('Failed to load RUL data:', e);
+                alert('数据加载失败，请重试');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function updateResultCards(data) {
+            document.getElementById('rulStatsGrid').style.display = 'grid';
+            document.getElementById('suggestionCard').style.display = 'block';
+
+            const score = data.current_health_score;
+            const rul = data.rul_prediction;
+
+            // Health score with color
+            const scoreEl = document.getElementById('rulHealthScore');
+            scoreEl.textContent = score;
+            scoreEl.style.color = getScoreColor(score);
+
+            // RUL percent
+            document.getElementById('rulPercent').textContent = rul.estimated_percent + '%';
+
+            // RUL time estimate (human-readable)
+            const timeEl = document.getElementById('rulTimeText');
+            timeEl.textContent = rul.estimated_time_text || '--';
+            const color = getScoreColor(score);
+            if (rul.estimated_percent < 30) timeEl.style.color = '#e74c3c';
+            else if (rul.estimated_percent < 60) timeEl.style.color = '#f39c12';
+            else timeEl.style.color = '#27ae60';
+
+            // Stage
+            document.getElementById('rulStage').textContent = rul.stage;
+            document.getElementById('rulStage').style.color = getScoreColor(score);
+
+            // Suggestion
+            document.getElementById('rulSuggestion').textContent = rul.suggestion;
+
+            // Color the stat cards
+            document.getElementById('rulScoreCard').querySelector('.stat-icon').style.background = getScoreBg(score);
+            document.getElementById('rulStageCard').querySelector('.stat-icon').style.background = getScoreBg(score);
+        }
+
+        function updateRmsTrendChart(data) {
+            const chart = charts.rmsTrend;
+            if (!chart) return;
+
+            const rms = data.rms_trend || [];
+            const times = rms.map(d => d.timestamp);
+            const combinedRms = rms.map(d => d.combined_rms);
+            const hRms = rms.map(d => d.h_rms);
+            const vRms = rms.map(d => d.v_rms);
+
+            // Linear trend line
+            const n = combinedRms.length;
+            let trendData = [];
+            if (n > 1) {
+                const xMean = (n - 1) / 2;
+                const yMean = combinedRms.reduce((a, b) => a + b, 0) / n;
+                let num = 0, den = 0;
+                for (let i = 0; i < n; i++) { num += (i - xMean) * (combinedRms[i] - yMean); den += (i - xMean) ** 2; }
+                const slope = den !== 0 ? num / den : 0;
+                const intercept = yMean - slope * xMean;
+                trendData = combinedRms.map((_, i) => round4(slope * i + intercept));
+            }
+
+            chart.setOption({
+                title: null,
+                tooltip: { trigger: 'axis' },
+                legend: { data: ['综合RMS', '水平RMS', '垂直RMS', '退化趋势线'], top: 5 },
+                grid: { left: 60, right: 25, top: 45, bottom: 55 },
+                dataZoom: [
+                    { type: 'inside' },
+                    { type: 'slider', height: 20, bottom: 10 }
+                ],
+                xAxis: {
+                    type: 'category',
+                    data: times,
+                    axisLabel: { rotate: 45, fontSize: 9 },
+                    name: '时间'
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'RMS (g)',
+                    axisLabel: { fontSize: 10 }
+                },
+                series: [
+                    {
+                        name: '综合RMS', type: 'line', data: combinedRms,
+                        smooth: true, symbol: 'none',
+                        lineStyle: { color: '#2c3e50', width: 2.5 }
+                    },
+                    {
+                        name: '水平RMS', type: 'line', data: hRms,
+                        smooth: true, symbol: 'none',
+                        lineStyle: { color: '#2980b9', width: 1.5, type: 'dashed' }
+                    },
+                    {
+                        name: '垂直RMS', type: 'line', data: vRms,
+                        smooth: true, symbol: 'none',
+                        lineStyle: { color: '#e74c3c', width: 1.5, type: 'dashed' }
+                    },
+                    {
+                        name: '退化趋势线', type: 'line', data: trendData,
+                        smooth: false, symbol: 'none',
+                        lineStyle: { color: '#f39c12', width: 2, type: 'dotted' }
+                    }
+                ]
+            });
+        }
+
+        function updateHealthTrendChart(data) {
+            const chart = charts.healthTrend;
+            if (!chart) return;
+
+            const health = data.health_trend || [];
+            const times = health.map(d => d.timestamp);
+            const scores = health.map(d => d.health_score);
+            const n = scores.length;
+            const currentScore = data.current_health_score;
+            const rul = data.rul_prediction;
+
+            // Extend trend line to zero
+            let extendedTimes = [...times];
+            let extendedScores = [...scores];
+            if (n > 1 && scores[n-1] < 100) {
+                const lastSlope = (scores[n-1] - scores[n-2]) || -0.5;
+                const stepsToZero = Math.max(0, Math.ceil(scores[n-1] / Math.abs(lastSlope)));
+                const lastTime = times[n-1];
+                for (let i = 0; i < Math.min(stepsToZero, 50); i++) {
+                    extendedTimes.push('预测' + (i+1));
+                    extendedScores.push(Math.max(0, scores[n-1] + lastSlope * (i + 1)));
+                }
+            }
+
+            chart.setOption({
+                title: null,
+                tooltip: {
+                    trigger: 'axis',
+                    formatter: function(params) {
+                        const d = params[0];
+                        const idx = d.dataIndex;
+                        const score = scores[idx] !== undefined ? scores[idx] : '--';
+                        return `${d.axisValue}<br/>健康评分: <b>${score}</b>`;
+                    }
+                },
+                grid: { left: 60, right: 30, top: 20, bottom: 55 },
+                dataZoom: [
+                    { type: 'inside' },
+                    { type: 'slider', height: 20, bottom: 10 }
+                ],
+                xAxis: {
+                    type: 'category',
+                    data: extendedTimes,
+                    axisLabel: { rotate: 45, fontSize: 9 },
+                    name: '时间'
+                },
+                yAxis: {
+                    type: 'value',
+                    name: '健康评分',
+                    min: 0, max: 105,
+                    axisLabel: { fontSize: 10 },
+                    splitLine: { lineStyle: { type: 'dashed' } }
+                },
+                visualMap: {
+                    show: false,
+                    pieces: [
+                        { gte: 80, color: '#52c41a' },
+                        { gte: 60, lt: 80, color: '#faad14' },
+                        { gte: 40, lt: 60, color: '#fa8c16' },
+                        { gte: 20, lt: 40, color: '#f5222d' },
+                        { lt: 20, color: '#cf1322' }
+                    ]
+                },
+                series: [
+                    {
+                        type: 'line',
+                        data: extendedScores.map((s, i) => i >= scores.length ? { value: s, lineStyle: { type: 'dashed' } } : s),
+                        smooth: true,
+                        symbol: 'circle',
+                        symbolSize: 4,
+                        lineStyle: { width: 2.5 },
+                        markLine: {
+                            silent: true,
+                            symbol: 'none',
+                            data: [
+                                { yAxis: 80, label: { formatter: '健康线' }, lineStyle: { color: '#52c41a', type: 'dashed' } },
+                                { yAxis: 60, label: { formatter: '注意线' }, lineStyle: { color: '#faad14', type: 'dashed' } },
+                                { yAxis: 40, label: { formatter: '警告线' }, lineStyle: { color: '#f5222d', type: 'dashed' } }
+                            ]
+                        },
+                        markPoint: n > 0 ? {
+                            data: [
+                                {
+                                    name: '当前',
+                                    coord: [times[n-1], scores[n-1]],
+                                    value: '当前',
+                                    symbol: 'pin', symbolSize: 40,
+                                    itemStyle: { color: getScoreColor(scores[n-1]) }
+                                }
+                            ]
+                        } : undefined
+                    }
+                ]
+            });
+        }
+
+        function updateCompareBarChart(data) {
+            const chart = charts.compareBar;
+            if (!chart) return;
+
+            const early = data.early_rms;
+            const late = data.late_rms;
+
+            chart.setOption({
+                title: null,
+                tooltip: { trigger: 'axis' },
+                legend: { data: ['初期 (前3批次)', '当前 (最后3批次)'], top: 5 },
+                grid: { left: 60, right: 25, top: 40, bottom: 40 },
+                xAxis: {
+                    type: 'category',
+                    data: ['水平RMS', '垂直RMS', '综合RMS']
+                },
+                yAxis: {
+                    type: 'value',
+                    name: 'RMS (g)'
+                },
+                series: [
+                    {
+                        name: '初期 (前3批次)', type: 'bar',
+                        data: [
+                            { value: round4(early.h_rms), itemStyle: { color: '#52c41a' } },
+                            { value: round4(early.v_rms), itemStyle: { color: '#73d13d' } },
+                            { value: round4(early.combined), itemStyle: { color: '#95de64' } }
+                        ],
+                        barWidth: '30%',
+                        label: { show: true, position: 'top', fontSize: 10 }
+                    },
+                    {
+                        name: '当前 (最后3批次)', type: 'bar',
+                        data: [
+                            { value: round4(late.h_rms), itemStyle: { color: '#e74c3c' } },
+                            { value: round4(late.v_rms), itemStyle: { color: '#ec7063' } },
+                            { value: round4(late.combined), itemStyle: { color: '#f1948a' } }
+                        ],
+                        barWidth: '30%',
+                        label: { show: true, position: 'top', fontSize: 10 }
+                    }
+                ]
+            });
+        }
+
+        function updateGaugeChart(data) {
+            const chart = charts.gauge;
+            if (!chart) return;
+
+            const score = data.current_health_score;
+            const rulPct = data.rul_prediction.estimated_percent;
+            const degPct = data.degradation.combined_pct;
+
+            chart.setOption({
+                title: null,
+                series: [
+                    {
+                        type: 'gauge',
+                        startAngle: 210,
+                        endAngle: -30,
+                        center: ['50%', '55%'],
+                        radius: '80%',
+                        min: 0,
+                        max: 100,
+                        splitNumber: 10,
+                        axisLine: {
+                            show: true,
+                            lineStyle: {
+                                width: 20,
+                                color: [
+                                    [0.2, '#cf1322'],
+                                    [0.4, '#f5222d'],
+                                    [0.6, '#fa8c16'],
+                                    [0.8, '#faad14'],
+                                    [1, '#52c41a']
+                                ]
+                            }
+                        },
+                        pointer: {
+                            icon: 'path://M12.8,0.7l12,40.1H0.7L12.8,0.7z',
+                            length: '70%',
+                            width: 8,
+                            offsetCenter: [0, '-10%'],
+                            itemStyle: { color: 'auto' }
+                        },
+                        axisTick: { distance: -20, length: 8, lineStyle: { width: 1, color: '#999' } },
+                        splitLine: { distance: -22, length: 16, lineStyle: { width: 2, color: '#999' } },
+                        axisLabel: { color: '#999', distance: 30, fontSize: 10 },
+                        anchor: { show: true, showAbove: true, size: 18, itemStyle: { borderWidth: 2 } },
+                        title: { show: true, offsetCenter: [0, '80%'], fontSize: 14 },
+                        detail: {
+                            valueAnimation: true,
+                            fontSize: 28,
+                            offsetCenter: [0, '45%'],
+                            formatter: function(value) { return '{value}'; },
+                            color: 'auto'
+                        },
+                        data: [{ value: score, name: '健康评分' }]
+                    }
+                ]
+            });
+        }
+
+        function initCharts() {
+            charts.rmsTrend = echarts.init(document.getElementById('chartRmsTrend'));
+            charts.healthTrend = echarts.init(document.getElementById('chartHealthTrend'));
+            charts.compareBar = echarts.init(document.getElementById('chartCompareBar'));
+            charts.gauge = echarts.init(document.getElementById('chartGauge'));
+
+            window.addEventListener('resize', () => {
+                Object.values(charts).forEach(c => c && c.resize());
+            });
+        }
+
+        function clearCharts() {
+            showLoading(false);
+            document.getElementById('rulStatsGrid').style.display = 'none';
+            document.getElementById('suggestionCard').style.display = 'none';
+            Object.values(charts).forEach(c => {
+                if (c) c.clear();
+            });
+        }
+
+        function showLoading(loading) {
+            if (loading) {
+                Object.values(charts).forEach(c => {
+                    if (c) c.showLoading({
+                        text: '加载中...',
+                        color: '#2980b9',
+                        maskColor: 'rgba(255, 255, 255, 0.8)'
+                    });
+                });
+            } else {
+                Object.values(charts).forEach(c => {
+                    if (c) c.hideLoading();
+                });
+            }
+        }
+
+        function getScoreColor(score) {
+            if (score >= 80) return '#52c41a';
+            if (score >= 60) return '#faad14';
+            if (score >= 40) return '#fa8c16';
+            if (score >= 20) return '#f5222d';
+            return '#cf1322';
+        }
+
+        function getScoreBg(score) {
+            if (score >= 80) return '#eafaf1';
+            if (score >= 60) return '#fef9e7';
+            if (score >= 40) return '#fff7e6';
+            if (score >= 20) return '#fdedec';
+            return '#fce4e4';
+        }
+
+        function round4(val) {
+            if (!val) return 0;
+            return Math.round(val * 10000) / 10000;
+        }
+
+        function formatNumber(num) {
+            if (!num) return '0';
+            if (num >= 100000000) return (num / 100000000).toFixed(1) + '亿';
+            if (num >= 10000) return (num / 10000).toFixed(1) + '万';
+            return num.toLocaleString();
+        }
+    </script>
+</body>
+</html>

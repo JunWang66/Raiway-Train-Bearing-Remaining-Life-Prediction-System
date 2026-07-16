@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>工作条件 - 铁路列车轴承剩余寿命预测系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="/static/css/style.css" rel="stylesheet">
+    <style>
+        .condition-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 20px; }
+        .condition-card {
+            background: #fff; border-radius: 12px; border: 1px solid #e1e8ed;
+            overflow: hidden; transition: box-shadow 0.2s;
+        }
+        .condition-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.1); }
+        .condition-card-header {
+            padding: 18px 20px; font-weight: 600; font-size: 16px;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .condition-card-body { padding: 0 20px 20px; }
+        .condition-spec { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+        .condition-spec-item { background: #f8f9fa; border-radius: 8px; padding: 10px 12px; }
+        .condition-spec-label { font-size: 11px; color: #7f8c8d; text-transform: uppercase; letter-spacing: 0.5px; }
+        .condition-spec-value { font-size: 15px; font-weight: 600; color: #2c3e50; margin-top: 2px; }
+        .condition-bearings { margin-top: 10px; }
+        .condition-bearings-label { font-size: 12px; color: #7f8c8d; margin-bottom: 6px; }
+        .bearing-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+        .bearing-tag {
+            display: inline-block; padding: 3px 10px; border-radius: 20px;
+            font-size: 12px; color: #2980b9; background: #e8f4fd;
+            text-decoration: none; transition: background 0.15s;
+        }
+        .bearing-tag:hover { background: #d1ecf9; color: #1a6d9f; }
+    </style>
+</head>
+<body>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <i class="bi bi-train-front"></i>
+            <span class="brand-text">铁路列车轴承剩余寿命预测系统</span>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="/dashboard" class="nav-item">
+                <i class="bi bi-speedometer2"></i>
+                <span>系统仪表盘</span>
+            </a>
+            <a href="/comparison" class="nav-item">
+                <i class="bi bi-bar-chart-steps"></i>
+                <span>对比分析</span>
+            </a>
+            <a href="/rul" class="nav-item">
+                <i class="bi bi-hourglass-split"></i>
+                <span>剩余寿命预测</span>
+            </a>
+            <div class="nav-divider"></div>
+            <a href="/bearings" class="nav-item">
+                <i class="bi bi-gear"></i>
+                <span>轴承列表</span>
+            </a>
+            <a href="/conditions" class="nav-item active">
+                <i class="bi bi-sliders"></i>
+                <span>工作条件</span>
+            </a>
+            <a href="/faults" class="nav-item">
+                <i class="bi bi-exclamation-triangle"></i>
+                <span>故障类型</span>
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <i class="bi bi-person-circle"></i>
+                <span>{{ user.name if user else '用户' }}</span>
+            </div>
+            <button onclick="handleLogout()" class="btn-logout" title="退出登录">
+                <i class="bi bi-box-arrow-right"></i>
+            </button>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="topbar">
+            <button class="toggle-sidebar" onclick="toggleSidebar()">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="topbar-title">工作条件</div>
+            <div class="topbar-right">
+                <span class="topbar-time" id="topbarTime"></span>
+            </div>
+        </header>
+
+        <div class="content-area">
+            <div class="condition-grid" id="conditionGrid">
+                <div class="text-center py-5 text-muted" style="grid-column: 1/-1;">加载中...</div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            loadConditions();
+            updateTime();
+            setInterval(updateTime, 10000);
+        });
+
+        function updateTime() {
+            document.getElementById('topbarTime').textContent = new Date().toLocaleString('zh-CN');
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        }
+
+        async function handleLogout() {
+            try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+            window.location.href = '/login';
+        }
+
+        async function loadConditions() {
+            try {
+                const [condResp, bearingResp] = await Promise.all([
+                    fetch('/api/operating_conditions'),
+                    fetch('/api/bearings?dataset=all')
+                ]);
+                const condData = await condResp.json();
+                const bearingData = await bearingResp.json();
+
+                // Group bearings by condition
+                const bearingsByCond = {};
+                bearingData.bearings.forEach(b => {
+                    const c = b.condition || 'Unknown';
+                    if (!bearingsByCond[c]) bearingsByCond[c] = [];
+                    bearingsByCond[c].push(b);
+                });
+
+                const colors = ['#2980b9', '#27ae60', '#8e44ad', '#e74c3c', '#f39c12'];
+
+                document.getElementById('conditionGrid').innerHTML = condData.conditions.map((cond, i) => {
+                    const bearings = bearingsByCond[cond.condition_name] || [];
+                    const freqHz = cond.rotating_speed_rpm ? (cond.rotating_speed_rpm / 60).toFixed(1) : '--';
+
+                    return `
+                    <div class="condition-card">
+                        <div class="condition-card-header" style="background: ${colors[i % colors.length]}10; border-bottom: 2px solid ${colors[i % colors.length]}30;">
+                            <span style="display: inline-block; width: 32px; height: 32px; border-radius: 8px; background: ${colors[i % colors.length]}; color: #fff; text-align: center; line-height: 32px; font-size: 16px;">
+                                ${i + 1}
+                            </span>
+                            ${cond.condition_name}
+                        </div>
+                        <div class="condition-card-body">
+                            <div class="condition-spec">
+                                <div class="condition-spec-item">
+                                    <div class="condition-spec-label">径向载荷</div>
+                                    <div class="condition-spec-value">${cond.radial_force_kN} kN</div>
+                                </div>
+                                <div class="condition-spec-item">
+                                    <div class="condition-spec-label">转速</div>
+                                    <div class="condition-spec-value">${cond.rotating_speed_rpm} rpm</div>
+                                </div>
+                                <div class="condition-spec-item">
+                                    <div class="condition-spec-label">转频</div>
+                                    <div class="condition-spec-value">${freqHz} Hz</div>
+                                </div>
+                                <div class="condition-spec-item">
+                                    <div class="condition-spec-label">采样频率</div>
+                                    <div class="condition-spec-value">${cond.sampling_frequency_hz ? (cond.sampling_frequency_hz / 1000).toFixed(1) + ' kHz' : '--'}</div>
+                                </div>
+                                <div class="condition-spec-item">
+                                    <div class="condition-spec-label">每批采样点</div>
+                                    <div class="condition-spec-value">${cond.sampling_points ? cond.sampling_points.toLocaleString() : '--'}</div>
+                                </div>
+                                <div class="condition-spec-item">
+                                    <div class="condition-spec-label">采样周期</div>
+                                    <div class="condition-spec-value">${cond.sampling_period_min ?? '--'} min</div>
+                                </div>
+                            </div>
+                            ${cond.description ? `<p style="font-size: 13px; color: #7f8c8d; margin-bottom: 10px;">${cond.description}</p>` : ''}
+                            <div class="condition-bearings">
+                                <div class="condition-bearings-label">关联轴承 (${bearings.length})</div>
+                                <div class="bearing-tags">
+                                    ${bearings.map(b => `
+                                        <a href="/bearing/${b.bearing_no}" class="bearing-tag" title="${b.fault_type || ''}">
+                                            ${b.bearing_no}
+                                        </a>
+                                    `).join('')}
+                                    ${bearings.length === 0 ? '<span style="font-size: 12px; color: #bdc3c7;">暂无轴承</span>' : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    `;
+                }).join('');
+
+            } catch (e) {
+                console.error('Failed to load conditions:', e);
+                document.getElementById('conditionGrid').innerHTML =
+                    '<div class="text-center py-5 text-danger" style="grid-column: 1/-1;">加载失败，请重试</div>';
+            }
+        }
+    </script>
+</body>
+</html>

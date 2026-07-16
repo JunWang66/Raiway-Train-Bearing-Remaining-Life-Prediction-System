@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>轴承列表 - 铁路列车轴承剩余寿命预测系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="/static/css/style.css" rel="stylesheet">
+</head>
+<body>
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <i class="bi bi-train-front"></i>
+            <span class="brand-text">铁路列车轴承剩余寿命预测系统</span>
+        </div>
+        <nav class="sidebar-nav">
+            <a href="/dashboard" class="nav-item">
+                <i class="bi bi-speedometer2"></i>
+                <span>系统仪表盘</span>
+            </a>
+            <a href="/comparison" class="nav-item">
+                <i class="bi bi-bar-chart-steps"></i>
+                <span>对比分析</span>
+            </a>
+            <a href="/rul" class="nav-item">
+                <i class="bi bi-hourglass-split"></i>
+                <span>剩余寿命预测</span>
+            </a>
+            <div class="nav-divider"></div>
+            <a href="/bearings" class="nav-item active">
+                <i class="bi bi-gear"></i>
+                <span>轴承列表</span>
+            </a>
+            <a href="/conditions" class="nav-item">
+                <i class="bi bi-sliders"></i>
+                <span>工作条件</span>
+            </a>
+            <a href="/faults" class="nav-item">
+                <i class="bi bi-exclamation-triangle"></i>
+                <span>故障类型</span>
+            </a>
+        </nav>
+        <div class="sidebar-footer">
+            <div class="user-info">
+                <i class="bi bi-person-circle"></i>
+                <span>{{ user.name if user else '用户' }}</span>
+            </div>
+            <button onclick="handleLogout()" class="btn-logout" title="退出登录">
+                <i class="bi bi-box-arrow-right"></i>
+            </button>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="topbar">
+            <button class="toggle-sidebar" onclick="toggleSidebar()">
+                <i class="bi bi-list"></i>
+            </button>
+            <div class="topbar-title">轴承列表</div>
+            <div class="topbar-right">
+                <span class="topbar-time" id="topbarTime"></span>
+            </div>
+        </header>
+
+        <div class="content-area">
+            <!-- Filters -->
+            <div class="control-panel">
+                <div class="panel-title">
+                    <i class="bi bi-funnel"></i> 筛选条件
+                </div>
+                <div class="control-row">
+                    <div class="control-item">
+                        <label>数据集</label>
+                        <select id="datasetFilter" onchange="loadBearings()">
+                            <option value="all">全部数据集</option>
+                            <option value="xjtu">XJTU-SY 数据集</option>
+                            <option value="gearbox">Gearbox 数据集</option>
+                            <option value="test">测试样本</option>
+                        </select>
+                    </div>
+                    <div class="control-item">
+                        <label>故障类型</label>
+                        <select id="faultFilter" onchange="loadBearings()">
+                            <option value="">全部</option>
+                        </select>
+                    </div>
+                    <div class="control-item">
+                        <label>搜索</label>
+                        <input type="text" id="searchInput" placeholder="轴承编号..." oninput="debounceSearch()">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bearings Table -->
+            <div class="chart-card">
+                <div class="chart-card-header">
+                    <h5><i class="bi bi-gear"></i> 轴承列表 (<span id="bearingCount">0</span>)</h5>
+                </div>
+                <div style="overflow-x: auto; padding: 16px;">
+                    <table class="data-table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th>轴承编号</th>
+                                <th>数据集</th>
+                                <th>工作条件</th>
+                                <th>载荷 (kN)</th>
+                                <th>转速 (rpm)</th>
+                                <th>故障类型</th>
+                                <th>故障元件</th>
+                                <th>CSV文件数</th>
+                                <th>寿命 (min)</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bearingsTableBody">
+                            <tr><td colspan="10" class="text-center py-4 text-muted">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let allBearings = [];
+        let searchTimer = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadBearings();
+            loadFaultTypes();
+            updateTime();
+            setInterval(updateTime, 10000);
+        });
+
+        function updateTime() {
+            document.getElementById('topbarTime').textContent = new Date().toLocaleString('zh-CN');
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        }
+
+        async function handleLogout() {
+            try { await fetch('/api/auth/logout', { method: 'POST' }); } catch (e) {}
+            window.location.href = '/login';
+        }
+
+        function debounceSearch() {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(loadBearings, 300);
+        }
+
+        async function loadBearings() {
+            const dataset = document.getElementById('datasetFilter').value;
+            const fault = document.getElementById('faultFilter').value;
+            const search = document.getElementById('searchInput').value;
+
+            let url = `/api/bearings?dataset=${dataset}`;
+            if (fault) url += `&fault_type=${encodeURIComponent(fault)}`;
+            if (search) url += `&search=${encodeURIComponent(search)}`;
+
+            try {
+                const resp = await fetch(url);
+                const data = await resp.json();
+                allBearings = data.bearings;
+
+                document.getElementById('bearingCount').textContent = allBearings.length;
+
+                const tbody = document.getElementById('bearingsTableBody');
+                if (allBearings.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="10" class="text-center py-4 text-muted">无匹配轴承</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = allBearings.map(b => {
+                    let dataset = '未知';
+                    if (b.bearing_no.startsWith('Bearing') && b.bearing_no.includes('_') && !b.bearing_no.startsWith('Bearing_')) {
+                        dataset = 'XJTU-SY';
+                    } else if (b.bearing_no.startsWith('Gearbox')) {
+                        dataset = 'Gearbox';
+                    } else if (b.bearing_no.startsWith('Bearing_')) {
+                        dataset = '测试样本';
+                    }
+
+                    const faultDisplay = cleanFaultType(b.fault_type);
+
+                    return `
+                        <tr class="clickable-row" onclick="location.href='/bearing/${b.bearing_no}'" style="cursor: pointer;" title="点击查看详情">
+                            <td><strong>${b.bearing_no}</strong></td>
+                            <td><span class="badge bg-secondary">${dataset}</span></td>
+                            <td>${b.condition || '--'}</td>
+                            <td>${b.radial_force_kN || '--'}</td>
+                            <td>${b.rotating_speed_rpm || '--'}</td>
+                            <td><span style="color: ${getFaultColor(b.fault_type)}; font-weight: 500;">${faultDisplay}</span></td>
+                            <td>${b.fault_element || '--'}</td>
+                            <td>${b.total_csv_files || '--'}</td>
+                            <td>${b.lifetime_minutes > 0 ? b.lifetime_minutes + ' min' : '--'}</td>
+                            <td>
+                                <a href="/bearing/${b.bearing_no}" class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation();">
+                                    <i class="bi bi-eye"></i> 详情
+                                </a>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (e) {
+                console.error('Failed to load bearings:', e);
+                document.getElementById('bearingsTableBody').innerHTML =
+                    '<tr><td colspan="10" class="text-center py-4 text-danger">加载失败，请重试</td></tr>';
+            }
+        }
+
+        async function loadFaultTypes() {
+            try {
+                const resp = await fetch('/api/fault_types');
+                const data = await resp.json();
+                const select = document.getElementById('faultFilter');
+                data.fault_types.forEach(ft => {
+                    const opt = document.createElement('option');
+                    opt.value = ft.fault_type;
+                    opt.textContent = `${ft.fault_type} (${ft.bearing_count})`;
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                console.error('Failed to load fault types:', e);
+            }
+        }
+
+        function getFaultColor(faultType) {
+            if (!faultType) return '#95a5a6';
+            const t = faultType.toLowerCase();
+            if (t.includes('xjtu-sy') || t.includes('dataset')) return '#95a5a6';
+            if (t.includes('health')) return '#27ae60';
+            if (t.includes('inner') || t.includes('内圈')) return '#e74c3c';
+            if (t.includes('outer') || t.includes('外圈')) return '#f39c12';
+            if (t.includes('ball') || t.includes('滚动体') || t.includes('滚珠')) return '#2980b9';
+            if (t.includes('cage') || t.includes('保持架')) return '#8e44ad';
+            if (t.includes('wear') || t.includes('磨损')) return '#d35400';
+            if (t.includes('fatigue') || t.includes('疲劳')) return '#c0392b';
+            if (t.includes('fracture') || t.includes('断裂')) return '#7f8c8d';
+            if (t.includes('comb') || t.includes('复合')) return '#c0392b';
+            if (t.includes('miss') || t.includes('缺失')) return '#7f8c8d';
+            if (t.includes('root') || t.includes('齿根')) return '#d35400';
+            if (t.includes('surface') || t.includes('表面')) return '#f39c12';
+            if (t.includes('chipped') || t.includes('剥落')) return '#e67e22';
+            return '#3498db';
+        }
+
+        function cleanFaultType(ft) {
+            if (!ft) return '--';
+            const t = ft.toLowerCase().trim();
+            // Dataset labels or healthy → "无故障"
+            if (t === 'xjtu-sy dataset' || t.includes('dataset')) return '无故障';
+            if (t === 'health') return '无故障';
+            return ft;
+        }
+    </script>
+</body>
+</html>
